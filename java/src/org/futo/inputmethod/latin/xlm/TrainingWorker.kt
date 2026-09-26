@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.mutableStateOf
 import androidx.datastore.preferences.core.intPreferencesKey
 import kotlinx.coroutines.flow.MutableSharedFlow
+import java.io.File
 
 /*
 import android.app.NotificationChannel
@@ -144,6 +145,9 @@ class TrainingWorker(val context: Context, val parameters: WorkerParameters) : C
 
         val modelFile = File(modelToTrain.path)
 
+        // Phase 0: preserve a pristine copy before any fine-tune can overwrite it.
+        backupPristineModelIfNeeded(modelFile)
+
         TrainingWorkerStatus.state.emit(
             TrainingStateWithModel(
                 TrainingState.Training,
@@ -201,12 +205,8 @@ class TrainingWorker(val context: Context, val parameters: WorkerParameters) : C
 
         TrainingWorkerStatus.lmRequest.emit(LanguageModelFacilitatorRequest.ClearTrainingLog)
 
-        val fallback = File(
-            modelFile.absolutePath + ".bak"
-        )
-
-        // TODO: A better solution for backup/reverting, etc
-        //modelFile.copyTo(fallback, overwrite = true)
+        // Rollback is handled via the pristine backup (see backupPristineModelIfNeeded /
+        // restorePristineModel); the output is written over the live model file here.
         outputModel.copyTo(modelFile, overwrite = true)
 
         ModelPaths.signalReloadModels()
@@ -337,3 +337,58 @@ object TrainingWorkerStatus {
 
 public fun scheduleTrainingWorkerBackground(context: Context) { }
 public fun scheduleTrainingWorkerImmediately(context: Context, model: ModelInfoLoader? = null, trainingData: String? = null) { }
+
+private const val PRISTINE_BACKUP_SUFFIX = ".pristine"
+
+/**
+ * Phase 0: keep a pristine copy of the model before the first fine-tune overwrites it, so a bad
+ * training run can always be rolled back. Never overwrites an existing backup, so the earliest
+ * (closest to shipped) copy is preserved.
+ */
+fun backupPristineModelIfNeeded(modelFile: File): Boolean {
+    val backup = File(modelFile.absolutePath + PRISTINE_BACKUP_SUFFIX)
+    if (backup.exists()) return true
+    return try {
+        modelFile.copyTo(backup, overwrite = false)
+        println("Backed up pristine model to ${backup.absolutePath}")
+        true
+    } catch (e: Exception) {
+        e.printStackTrace()
+        false
+    }
+}
+
+/**
+ * Phase 0: restore the pristine model backup. Writes via temp + atomic rename so a concurrently
+ * memory-mapped model keeps working on the old inode, then asks the facilitator to reload.
+ * Falls back to the bundled raw resource for the base model. Returns false when neither source
+ * exists.
+ */
+suspend fun restorePristineModel(context: Context, modelNameWithoutExtension: String): Boolean {
+    val dir = ModelPaths.getModelDirectory(context)
+    val modelFile = File(dir, "$modelNameWithoutExtension.gguf")
+    val backup = File(dir, "$modelNameWithoutExtension.gguf$PRISTINE_BACKUP_SUFFIX")
+    return try {
+        val tmp = File(dir, "$modelNameWithoutExtension.gguf.restore-tmp")
+        when {
+            backup.exists() -> backup.copyTo(tmp, overwrite = true)
+            modelNameWithoutExtension == BASE_MODEL_NAME -> {
+                context.resources.openRawResource(BASE_MODEL_RESOURCE).use { input ->
+                    tmp.outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+            else -> return false
+        }
+        if (!tmp.renameTo(modelFile)) {
+            tmp.copyTo(modelFile, overwrite = true)
+            tmp.delete()
+        }
+        TrainingWorkerStatus.lmRequest.emit(LanguageModelFacilitatorRequest.ResetModel)
+        ModelPaths.signalReloadModels()
+        println("Restored pristine model for $modelNameWithoutExtension")
+        true
+    } catch (e: Exception) {
+        e.printStackTrace()
+        false
+    }
+}

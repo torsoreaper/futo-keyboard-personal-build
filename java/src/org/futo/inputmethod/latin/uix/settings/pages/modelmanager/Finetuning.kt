@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import org.futo.inputmethod.latin.uix.settings.ScreenTitle
 import org.futo.inputmethod.latin.uix.settings.ScrollableList
 import org.futo.inputmethod.latin.uix.theme.Typography
@@ -32,6 +34,7 @@ import org.futo.inputmethod.latin.xlm.ModelPaths
 import org.futo.inputmethod.latin.xlm.TrainingState
 import org.futo.inputmethod.latin.xlm.TrainingStateWithModel
 import org.futo.inputmethod.latin.xlm.TrainingWorkerStatus
+import org.futo.inputmethod.latin.xlm.restorePristineModel
 import org.futo.inputmethod.latin.xlm.scheduleTrainingWorkerImmediately
 import java.io.File
 import kotlin.math.roundToInt
@@ -111,6 +114,8 @@ fun FinetuneModelScreen(file: File? = null, navController: NavHostController = r
     val loss = TrainingWorkerStatus.loss.collectAsState(initial = Float.MAX_VALUE)
 
     val customData = remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val resetStatus = remember { mutableStateOf<String?>(null) }
 
     ScrollableList {
         ScreenTitle("Finetuning", showBack = true, navController)
@@ -152,6 +157,30 @@ fun FinetuneModelScreen(file: File? = null, navController: NavHostController = r
             }) {
                 Text("Start Training")
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(onClick = {
+                val loader = currentModel.value?.toLoader()
+                if (loader == null) {
+                    resetStatus.value = "Pick a model first"
+                } else {
+                    scope.launch {
+                        resetStatus.value = if (restorePristineModel(
+                                context,
+                                loader.path.nameWithoutExtension
+                            )
+                        ) {
+                            "Restored original model"
+                        } else {
+                            "No pristine backup found for this model"
+                        }
+                    }
+                }
+            }) {
+                Text("Reset Personalized Model")
+            }
+            resetStatus.value?.let { Text(it) }
         }
     }
 }

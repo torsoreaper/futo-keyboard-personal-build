@@ -194,7 +194,7 @@ public final class Suggest {
         }
 
         final int firstOcurrenceOfTypedWordInSuggestions =
-                SuggestedWordInfo.removeDups("", suggestionsContainer);
+                SuggestedWordInfo.removeDups(typedWordString, suggestionsContainer);
 
         final SuggestedWordInfo whitelistedWordInfo =
                 getWhitelistedWordInfoOrNull(suggestionsContainer);
