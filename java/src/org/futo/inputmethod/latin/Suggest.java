@@ -56,6 +56,10 @@ public final class Suggest {
     // Close to -2**31
     public static final int SUPPRESS_SUGGEST_THRESHOLD = -2000000000;
 
+    // Default maximum difference in length between the typed word and a suggestion for it to be
+    // eligible for auto-correction. Used by code paths that don't have access to the setting.
+    public static final int DEFAULT_MAX_AUTO_CORRECTION_LENGTH_DELTA = 2;
+
     private static final boolean DBG = DebugFlags.DEBUG_ENABLED;
     private final DictionaryFacilitator mDictionaryFacilitator;
 
@@ -162,7 +166,8 @@ public final class Suggest {
             final WordComposer wordComposer, final int inputStyleIfNotPrediction,
             final boolean isCorrectionEnabled, final int sequenceNumber,
             final Locale locale, final SuggestionResults suggestionResults,
-            final float autoCorrectionThreshold, final boolean numberRowActive
+            final float autoCorrectionThreshold, final boolean numberRowActive,
+            final int maxAutoCorrectionLengthDelta
     ) {
         final String typedWordString = wordComposer.getTypedWord();
         final int trailingSingleQuotesCount =
@@ -255,7 +260,14 @@ public final class Suggest {
             hasAutoCorrection = false;
         } else {
             final SuggestedWordInfo firstSuggestion = suggestionResults.first();
-            if (suggestionResults.mFirstSuggestionExceedsConfidenceThreshold
+            // Only consider a correction if the top candidate is a plausible typo of what was
+            // typed, i.e. within the configured length tolerance.
+            final boolean lengthInTolerance = Math.abs(
+                    firstSuggestion.mWord.length() - consideredWord.length())
+                    <= maxAutoCorrectionLengthDelta;
+            if (!lengthInTolerance) {
+                hasAutoCorrection = false;
+            } else if (suggestionResults.mFirstSuggestionExceedsConfidenceThreshold
                     && firstOcurrenceOfTypedWordInSuggestions != 0) {
                 hasAutoCorrection = true;
             } else if (!AutoCorrectionUtils.suggestionExceedsThreshold(
@@ -336,7 +348,7 @@ public final class Suggest {
         callback.onGetSuggestedWords(
             obtainNonBatchedInputSuggestedWords(wordComposer, inputStyleIfNotPrediction,
                 isCorrectionEnabled, sequenceNumber, locale, suggestionResults, mAutoCorrectionThreshold,
-                    keyboard.mId.mNumberRow)
+                    keyboard.mId.mNumberRow, DEFAULT_MAX_AUTO_CORRECTION_LENGTH_DELTA)
         );
     }
 

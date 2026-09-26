@@ -85,6 +85,7 @@ import org.futo.inputmethod.latin.uix.getSettingBlocking
 import org.futo.inputmethod.latin.uix.getSettingFlow
 import org.futo.inputmethod.latin.uix.isDirectBootUnlocked
 import org.futo.inputmethod.latin.uix.safeKeyboardPadding
+import org.futo.inputmethod.latin.uix.seedBuiltinWordsIfNeeded
 import org.futo.inputmethod.latin.uix.setSetting
 import org.futo.inputmethod.latin.uix.theme.ThemeOption
 import org.futo.inputmethod.latin.uix.theme.applyWindowColors
@@ -392,6 +393,8 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
         LayoutManager.init(this)
 
         DataStoreHelper.init(this)
+
+        launchJob { seedBuiltinWordsIfNeeded() }
 
         val filter = IntentFilter(Intent.ACTION_USER_UNLOCKED)
         registerReceiver(unlockReceiver, filter)

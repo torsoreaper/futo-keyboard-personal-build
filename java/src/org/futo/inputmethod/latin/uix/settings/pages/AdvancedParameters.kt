@@ -13,7 +13,9 @@ import org.futo.inputmethod.latin.uix.settings.ScrollableList
 import org.futo.inputmethod.latin.uix.settings.SettingSlider
 import org.futo.inputmethod.latin.uix.settings.Tip
 import org.futo.inputmethod.latin.xlm.AutocorrectThresholdSetting
+import org.futo.inputmethod.latin.xlm.AutocorrectMaxLengthDeltaSetting
 import org.futo.inputmethod.latin.xlm.BinaryDictTransformerWeightSetting
+import kotlin.math.roundToInt
 
 @Preview
 @Composable
@@ -73,6 +75,24 @@ fun AdvancedParametersScreen(navController: NavHostController = rememberNavContr
                 "T = ${String.format("%.1f", it)}"
             },
             power = 2.5f
+        )
+
+        SettingSlider(
+            title = stringResource(R.string.prediction_settings_transformer_advanced_params_autocorrect_max_length_delta),
+            subtitle = stringResource(
+                R.string.prediction_settings_transformer_advanced_params_autocorrect_max_length_delta_subtitle,
+                AutocorrectMaxLengthDeltaSetting.default
+            ),
+            setting = AutocorrectMaxLengthDeltaSetting,
+            range = 0.0f .. 5.0f,
+            hardRange = 0.0f .. 5.0f,
+            transform = {
+                it.roundToInt()
+            },
+            indicator = {
+                "\u00b1$it letters"
+            },
+            steps = 4
         )
 
     }

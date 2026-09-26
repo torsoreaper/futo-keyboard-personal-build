@@ -5,6 +5,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.lifecycle.LifecycleCoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,11 @@ import kotlin.math.ceil
 val AutocorrectThresholdSetting = SettingsKey(
     floatPreferencesKey("lm_autocorrect_threshold"),
     4.0f
+)
+
+val AutocorrectMaxLengthDeltaSetting = SettingsKey(
+    intPreferencesKey("lm_autocorrect_max_length_delta"),
+    Suggest.DEFAULT_MAX_AUTO_CORRECTION_LENGTH_DELTA
 )
 
 val BinaryDictTransformerWeightSetting = SettingsKey(
@@ -379,7 +385,8 @@ public class LanguageModelFacilitator(
             locale,
             suggestionResults,
             settingsValues.mAutoCorrectionThreshold,
-            settingsValues.mIsNumberRowEnabled
+            settingsValues.mIsNumberRowEnabled,
+            context.getSetting(AutocorrectMaxLengthDeltaSetting)
         )
 
 
