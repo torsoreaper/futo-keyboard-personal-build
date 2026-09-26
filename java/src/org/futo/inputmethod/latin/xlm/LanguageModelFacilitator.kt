@@ -248,12 +248,21 @@ public class LanguageModelFacilitator(
             14, values.ngramContext.isBeginningOfSentenceContext)
 
 
+        val typedWordForTypoPrior = values.composedData.mTypedWord
         val reweightedSuggestions = lmSuggestions.mapIndexedNotNull { i, it ->
             if(transformerWeight == Float.NEGATIVE_INFINITY) { null } else {
+                // Phase 2 typo prior: boost candidates close in edit distance to what was typed,
+                // so a near-miss typo outranks a distant high-probability word. Conservative:
+                // +24%/+16%/+8% for distance 0/1/2, nothing beyond.
+                val typoBoost = if (typedWordForTypoPrior.isNotEmpty()) {
+                    1.0f + maxOf(0, 3 - levenshteinDistance(it.mWord, typedWordForTypoPrior)) * 0.08f
+                } else {
+                    1.0f
+                }
                 SuggestedWordInfo(
                     it.mWord,
                     it.mPrevWordsContext,
-                    (it.mScore.toFloat() * transformerWeight).toLong().coerceAtMost(Int.MAX_VALUE.toLong() - lmSuggestions.size)
+                    (it.mScore.toFloat() * transformerWeight * typoBoost).toLong().coerceAtMost(Int.MAX_VALUE.toLong() - lmSuggestions.size)
                         .toInt() - i + (lmSuggestions.size - 1),
                     it.mKindAndFlags,
                     it.mSourceDict,

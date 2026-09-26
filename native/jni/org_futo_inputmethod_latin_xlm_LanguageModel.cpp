@@ -30,6 +30,7 @@
 #define RETURNVAL_CLUELESS "clueless"
 
 #define NUM_RESULTS 3
+#define NUM_CORRECTION_RESULTS 6
 
 static std::string trim(const std::string &s) {
     auto start = s.begin();
@@ -851,7 +852,7 @@ struct LanguageModelState {
         }
 
         auto decoding_result = DecodePromptAndMixes(next_context, mixes);
-        auto results = Sample(decoding_result, NUM_RESULTS, capitals, banned_sequences);
+        auto results = Sample(decoding_result, NUM_CORRECTION_RESULTS, capitals, banned_sequences);
 
         std::vector<std::pair<float, std::string>> str_results;
         str_results.reserve(results.size());
