@@ -3,6 +3,7 @@
 #include "org_futo_inputmethod_latin_xlm_LanguageModel.h"
 
 #include <cstring> // for memset()
+#include <cmath>
 #include <vector>
 
 #include "jni.h"
@@ -1228,12 +1229,24 @@ namespace latinime {
         sortProbabilityPairVectorDescending(results);
 
         const char *result_probability_mode;
+        // Compare length-normalized (per-token) probabilities so that the threshold means
+        // the same thing regardless of word length. Adjusted scores at or below zero (e.g. from
+        // the exact-match penalty) normalize to zero.
+        auto normProb = [](float p, size_t len) -> float {
+            if (len == 0) len = 1;
+            if (p <= 0.0f) return 0.0f;
+            return powf(p, 1.0f / (float)len);
+        };
+        const float normTop = results.empty() ? 0.0f
+                : normProb(results[0].first, results[0].second.size());
+        const float normSecond = (results.size() < 2) ? 0.0f
+                : normProb(results[1].first, results[1].second.size());
         if(results.size() < 2) {
             // Not sure what to do here
             result_probability_mode = RETURNVAL_UNCERTAIN;
-        }else if(results[0].first > autocorrectThreshold * results[1].first) {
+        }else if(normTop > autocorrectThreshold * normSecond) {
             result_probability_mode = RETURNVAL_AUTOCORRECT;
-        }else if(results[0].first > (autocorrectThreshold * 0.1f) * results[1].first) {
+        }else if(normTop > (autocorrectThreshold * 0.1f) * normSecond) {
             result_probability_mode = RETURNVAL_UNCERTAIN;
         } else {
             result_probability_mode = RETURNVAL_CLUELESS;

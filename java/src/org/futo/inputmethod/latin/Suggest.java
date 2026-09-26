@@ -267,9 +267,6 @@ public final class Suggest {
                     <= maxAutoCorrectionLengthDelta;
             if (!lengthInTolerance) {
                 hasAutoCorrection = false;
-            } else if (suggestionResults.mFirstSuggestionExceedsConfidenceThreshold
-                    && firstOcurrenceOfTypedWordInSuggestions != 0) {
-                hasAutoCorrection = true;
             } else if (!AutoCorrectionUtils.suggestionExceedsThreshold(
                     firstSuggestion, consideredWord, autoCorrectionThreshold)) {
                 // Score is too low for autocorrect
@@ -281,6 +278,17 @@ public final class Suggest {
                 // TODO: this should not have its own logic here but be handled by the dictionary.
                 hasAutoCorrection = isAllowedByAutoCorrectionWithSpaceFilter(firstSuggestion);
             }
+        }
+
+        if (DBG && !suggestionResults.isEmpty()) {
+            final SuggestedWordInfo decisionTop = suggestionResults.first();
+            Log.d(TAG, "autocorrect decision: hasAutoCorrection=" + hasAutoCorrection
+                    + " typed=" + typedWordString
+                    + " top=" + decisionTop.mWord
+                    + " score=" + decisionTop.mScore
+                    + " kind=" + decisionTop.mKindAndFlags
+                    + " threshold=" + autoCorrectionThreshold
+                    + " maxDelta=" + maxAutoCorrectionLengthDelta);
         }
 
         final SuggestedWordInfo typedWordInfo = new SuggestedWordInfo(typedWordString,

@@ -846,8 +846,7 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
 
         long proximityInfoHandle = keyboard.getProximityInfo().getNativeProximityInfo();
         final SuggestionResults suggestionResults = new SuggestionResults(
-                SuggestedWords.MAX_SUGGESTIONS, ngramContext.isBeginningOfSentenceContext(),
-                false /* firstSuggestionExceedsConfidenceThreshold */);
+                SuggestedWords.MAX_SUGGESTIONS, ngramContext.isBeginningOfSentenceContext());
         final float[] weightOfLangModelVsSpatialModel =
                 new float[] { Dictionary.NOT_A_WEIGHT_OF_LANG_MODEL_VS_SPATIAL_MODEL };
 

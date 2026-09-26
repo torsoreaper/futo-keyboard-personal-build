@@ -245,7 +245,7 @@ public class LanguageModelFacilitator(
         if(dictionaryFacilitator.locales.size > 1) transformerWeight = 1.0f
 
         val suggestionResults = SuggestionResults(
-            14, values.ngramContext.isBeginningOfSentenceContext, false)
+            14, values.ngramContext.isBeginningOfSentenceContext)
 
 
         val reweightedSuggestions = lmSuggestions.mapIndexedNotNull { i, it ->

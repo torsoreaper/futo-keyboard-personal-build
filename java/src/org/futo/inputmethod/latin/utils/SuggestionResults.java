@@ -36,18 +36,14 @@ public final class SuggestionResults extends TreeSet<SuggestedWordInfo> {
     // TODO: Instead of a boolean , we may want to include the context of this suggestion results,
     // such as {@link NgramContext}.
     public final boolean mIsBeginningOfSentence;
-    public final boolean mFirstSuggestionExceedsConfidenceThreshold;
     private final int mCapacity;
 
-    public SuggestionResults(final int capacity, final boolean isBeginningOfSentence,
-            final boolean firstSuggestionExceedsConfidenceThreshold) {
-        this(sSuggestedWordInfoComparator, capacity, isBeginningOfSentence,
-                firstSuggestionExceedsConfidenceThreshold);
+    public SuggestionResults(final int capacity, final boolean isBeginningOfSentence) {
+        this(sSuggestedWordInfoComparator, capacity, isBeginningOfSentence);
     }
 
     private SuggestionResults(final Comparator<SuggestedWordInfo> comparator, final int capacity,
-            final boolean isBeginningOfSentence,
-            final boolean firstSuggestionExceedsConfidenceThreshold) {
+            final boolean isBeginningOfSentence) {
         super(comparator);
         mCapacity = capacity;
         if (ProductionFlags.INCLUDE_RAW_SUGGESTIONS) {
@@ -56,7 +52,6 @@ public final class SuggestionResults extends TreeSet<SuggestedWordInfo> {
             mRawSuggestions = null;
         }
         mIsBeginningOfSentence = isBeginningOfSentence;
-        mFirstSuggestionExceedsConfidenceThreshold = firstSuggestionExceedsConfidenceThreshold;
     }
 
     @Override
