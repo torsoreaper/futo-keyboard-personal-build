@@ -212,6 +212,14 @@ public final class Suggest {
                 (SHOULD_AUTO_CORRECT_USING_NON_WHITE_LISTED_SUGGESTION || whitelistedWord != null)
                 || (consideredWord.length() > 1 && (sourceDictionaryOfRemovedWord == null));
 
+        // A token with digits can still be auto-corrected when the digits were a mistap of the
+        // top-row letters (e.g. "hell9" -> "hello"); the caller promotes such a suggestion and
+        // this recognises it so the digit guards below don't reject it.
+        final SuggestedWordInfo firstSuggestionForGuards =
+                suggestionResults.isEmpty() ? null : suggestionResults.first();
+        final boolean digitToLetterCorrection = firstSuggestionForGuards != null
+                && isDigitToLetterCorrection(consideredWord, firstSuggestionForGuards.mWord);
+
         final boolean hasAutoCorrection;
         // If correction is not enabled, we never auto-correct. This is for example for when
         // the setting "Auto-correction" is "off": we still suggest, but we don't auto-correct.
@@ -227,15 +235,16 @@ public final class Suggest {
                 // typed with a lot of care
                 || wordComposer.hasDashes()
                 // If the word has digits, we never auto-correct because it's likely the word
-                // was type with a lot of care, unless number row is active
-                || (wordComposer.hasDigits() && !numberRowActive)
+                // was type with a lot of care, unless number row is active or the digits are a
+                // mistap of the top-row letters
+                || (wordComposer.hasDigits() && !numberRowActive && !digitToLetterCorrection)
                 // If the word is entirely digits, never autocorrect regardless of number row
                 // being active or not
                 || wordComposer.isEntirelyDigits()
                 // If it's an ordinal (1st, 2nd, 3rd), do not autocorrect
                 //|| wordComposer.isOrdinal(locale)
-                // If it starts with a digit, do not autocorrect
-                || wordComposer.startsWithDigit()
+                // If it starts with a digit, do not autocorrect, unless it's a digit->letter fix
+                || (wordComposer.startsWithDigit() && !digitToLetterCorrection)
                 // If it's attached to a non word, do not autocorrect
                 || wordComposer.isAttachedToNonWord()
                 // If the word is mostly caps, we never auto-correct because this is almost
@@ -390,6 +399,18 @@ public final class Suggest {
                 settingsValuesForSuggestion, SESSION_ID_TYPING, inputStyleIfNotPrediction);
         final Locale locale = mDictionaryFacilitator.getPrimaryLocale();
 
+        // If the typed token contains a digit that is really a top-row letter mistap ("hell9"),
+        // promote the corrected word so it can be committed on space.
+        final String digitToLetterFix =
+                findDigitLetterCorrection(mDictionaryFacilitator, wordComposer.getTypedWord());
+        if (digitToLetterFix != null) {
+            suggestionResults.add(new SuggestedWordInfo(digitToLetterFix, "",
+                    SuggestedWordInfo.MAX_SCORE,
+                    SuggestedWordInfo.KIND_FLAG_APPROPRIATE_FOR_AUTO_CORRECTION
+                            | SuggestedWordInfo.KIND_CORRECTION,
+                    null, SuggestedWordInfo.NOT_AN_INDEX, SuggestedWordInfo.NOT_A_CONFIDENCE));
+        }
+
         callback.onGetSuggestedWords(
             obtainNonBatchedInputSuggestedWords(wordComposer, inputStyleIfNotPrediction,
                 isCorrectionEnabled, sequenceNumber, locale, suggestionResults, mAutoCorrectionThreshold,
@@ -530,6 +551,125 @@ public final class Suggest {
     // into two words. c/v/b/n are directly above the space bar (strong); z/x/m are the outer keys.
     private static final String SPACE_SPLIT_STRONG_KEYS = "cvbn";
     private static final String SPACE_SPLIT_WEAK_KEYS = "zxm";
+
+    // The number row sits directly above the top letter row, so a digit can be a mistap of the
+    // letter below it: 1->q, 2->w, ... 9->o, 0->p.
+    private static final String NUMBER_ROW_DIGITS = "1234567890";
+    private static final String NUMBER_ROW_LETTERS = "qwertyuiop";
+
+    private static char[] digitLetterCandidates(final char digit) {
+        final int index = NUMBER_ROW_DIGITS.indexOf(digit);
+        if (index < 0) {
+            return null;
+        }
+        // The letter directly below the digit, plus its horizontal neighbours on the top row,
+        // because a thumb can land slightly to either side.
+        final StringBuilder candidates = new StringBuilder(3);
+        candidates.append(NUMBER_ROW_LETTERS.charAt(index));
+        if (index > 0) {
+            candidates.append(NUMBER_ROW_LETTERS.charAt(index - 1));
+        }
+        if (index < NUMBER_ROW_LETTERS.length() - 1) {
+            candidates.append(NUMBER_ROW_LETTERS.charAt(index + 1));
+        }
+        return candidates.toString().toCharArray();
+    }
+
+    /**
+     * Whether {@code suggestion} is the typed word with each digit replaced by a plausible
+     * top-row letter (used to let the digit guards know a digit->letter fix is being offered).
+     */
+    private static boolean isDigitToLetterCorrection(final String typed,
+            final String suggestion) {
+        if (typed == null || suggestion == null || typed.length() != suggestion.length()) {
+            return false;
+        }
+        boolean hasDigit = false;
+        for (int i = 0; i < typed.length(); i++) {
+            final char typedChar = typed.charAt(i);
+            final char suggestionChar = suggestion.charAt(i);
+            if (Character.isDigit(typedChar)) {
+                hasDigit = true;
+                final char[] candidates = digitLetterCandidates(typedChar);
+                if (candidates == null) {
+                    return false;
+                }
+                boolean matches = false;
+                for (final char candidate : candidates) {
+                    if (Character.toLowerCase(suggestionChar) == candidate) {
+                        matches = true;
+                        break;
+                    }
+                }
+                if (!matches) {
+                    return false;
+                }
+            } else if (Character.toLowerCase(typedChar) != Character.toLowerCase(suggestionChar)) {
+                return false;
+            }
+        }
+        return hasDigit;
+    }
+
+    /**
+     * Finds a real word made by replacing the digits in a token with the top-row letters below
+     * them (e.g. "hell9" -> "hello"), or null when there is no such word. Only positions that
+     * hold a digit are changed; the token must also contain at least one letter, so pure numbers
+     * are never touched.
+     */
+    public static String findDigitLetterCorrection(final DictionaryFacilitator dictionaryFacilitator,
+            final String rawTypedWord) {
+        if (dictionaryFacilitator == null || rawTypedWord == null) {
+            return null;
+        }
+        final int length = rawTypedWord.length();
+        if (length < 2 || length > 24) {
+            return null;
+        }
+        boolean hasDigit = false;
+        boolean hasLetter = false;
+        for (int i = 0; i < length; i++) {
+            if (Character.isDigit(rawTypedWord.charAt(i))) {
+                hasDigit = true;
+            } else if (Character.isLetter(rawTypedWord.charAt(i))) {
+                hasLetter = true;
+            }
+        }
+        if (!hasDigit || !hasLetter) {
+            return null;
+        }
+        final boolean capitalize = Character.isUpperCase(rawTypedWord.charAt(0));
+        final String typed = rawTypedWord.toLowerCase(Locale.ROOT);
+        final String found = searchDigitLetterCorrection(dictionaryFacilitator, typed.toCharArray(), 0);
+        if (found == null) {
+            return null;
+        }
+        return capitalize ? Character.toUpperCase(found.charAt(0)) + found.substring(1) : found;
+    }
+
+    private static String searchDigitLetterCorrection(final DictionaryFacilitator dictionaryFacilitator,
+            final char[] buffer, final int position) {
+        if (position >= buffer.length) {
+            final String candidate = new String(buffer);
+            return dictionaryFacilitator.isValidSpellingWord(candidate) ? candidate : null;
+        }
+        final char current = buffer[position];
+        if (Character.isDigit(current)) {
+            final char[] candidates = digitLetterCandidates(current);
+            for (final char letter : candidates) {
+                buffer[position] = letter;
+                final String result = searchDigitLetterCorrection(dictionaryFacilitator, buffer,
+                        position + 1);
+                if (result != null) {
+                    buffer[position] = current;
+                    return result;
+                }
+            }
+            buffer[position] = current;
+            return null;
+        }
+        return searchDigitLetterCorrection(dictionaryFacilitator, buffer, position + 1);
+    }
 
     private static boolean isAllowedByAutoCorrectionWithSpaceFilter(
             final String typedWord, final SuggestedWordInfo info) {

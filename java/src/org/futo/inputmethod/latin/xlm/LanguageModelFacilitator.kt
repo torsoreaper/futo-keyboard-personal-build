@@ -393,6 +393,23 @@ public class LanguageModelFacilitator(
             if(!filtered.contains(spaceSplitCandidate)) filtered.add(spaceSplitCandidate)
         }
 
+        // A token that contains a digit may be a mistap of the number row directly above the top
+        // letter row (e.g. "hell9" -> "hello"). When replacing those digits with the letters below
+        // yields a real word, promote it so it becomes the top suggestion and can be committed.
+        val digitToLetterCandidate = Suggest.findDigitLetterCorrection(dictionaryFacilitator, typedWordForSplit)
+        if(digitToLetterCandidate != null) {
+            if(BuildConfig.DEBUG) Log.d(TAG, "promoting digit->letter correction: $digitToLetterCandidate")
+            suggestionResults.add(SuggestedWordInfo(
+                digitToLetterCandidate,
+                "",
+                SuggestedWordInfo.MAX_SCORE,
+                SuggestedWordInfo.KIND_FLAG_APPROPRIATE_FOR_AUTO_CORRECTION or SuggestedWordInfo.KIND_CORRECTION,
+                null,
+                SuggestedWordInfo.NOT_AN_INDEX,
+                SuggestedWordInfo.NOT_A_CONFIDENCE
+            ))
+        }
+
         // Add reweightedSuggestions, with space replacement logic. It can replace one of the LM
         // suggestions if the top dictionary result has a space, based on heuristics about the
         // relative quality of the LM suggestion
