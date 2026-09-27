@@ -267,6 +267,12 @@ public final class Suggest {
                     <= maxAutoCorrectionLengthDelta;
             if (!lengthInTolerance) {
                 hasAutoCorrection = false;
+            } else if (firstOcurrenceOfTypedWordInSuggestions == 0) {
+                // The typed word itself was the top suggestion. It was removed from the
+                // candidate list above (it is re-added as KIND_TYPED), so the runner-up now
+                // sits in the auto-correction slot. Do not commit the runner-up; keep the
+                // typed word.
+                hasAutoCorrection = false;
             } else if (!AutoCorrectionUtils.suggestionExceedsThreshold(
                     firstSuggestion, consideredWord, autoCorrectionThreshold)) {
                 // Score is too low for autocorrect
