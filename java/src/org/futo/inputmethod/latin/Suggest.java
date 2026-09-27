@@ -60,6 +60,10 @@ public final class Suggest {
     // eligible for auto-correction. Used by code paths that don't have access to the setting.
     public static final int DEFAULT_MAX_AUTO_CORRECTION_LENGTH_DELTA = 2;
 
+    // Maximum edit distance for the typo bypass below. A larger distance means the top candidate
+    // is probably a different word, not a typo of what was typed.
+    private static final int MAX_TYPO_EDIT_DISTANCE = 2;
+
     private static final boolean DBG = DebugFlags.DEBUG_ENABLED;
     private final DictionaryFacilitator mDictionaryFacilitator;
 
@@ -167,7 +171,7 @@ public final class Suggest {
             final boolean isCorrectionEnabled, final int sequenceNumber,
             final Locale locale, final SuggestionResults suggestionResults,
             final float autoCorrectionThreshold, final boolean numberRowActive,
-            final int maxAutoCorrectionLengthDelta
+            final int maxAutoCorrectionLengthDelta, final boolean isTypedWordKnown
     ) {
         final String typedWordString = wordComposer.getTypedWord();
         final int trailingSingleQuotesCount =
@@ -273,6 +277,13 @@ public final class Suggest {
                 // sits in the auto-correction slot. Do not commit the runner-up; keep the
                 // typed word.
                 hasAutoCorrection = false;
+            } else if (!isTypedWordKnown
+                    && !firstSuggestion.mWord.equalsIgnoreCase(consideredWord)
+                    && levenshteinDistance(firstSuggestion.mWord, consideredWord)
+                            <= MAX_TYPO_EDIT_DISTANCE) {
+                // The typed word isn't a known word and the top candidate is a close match,
+                // so this is a typo: correct it without requiring full confidence.
+                hasAutoCorrection = isAllowedByAutoCorrectionWithSpaceFilter(firstSuggestion);
             } else if (!AutoCorrectionUtils.suggestionExceedsThreshold(
                     firstSuggestion, consideredWord, autoCorrectionThreshold)) {
                 // Score is too low for autocorrect
@@ -362,7 +373,8 @@ public final class Suggest {
         callback.onGetSuggestedWords(
             obtainNonBatchedInputSuggestedWords(wordComposer, inputStyleIfNotPrediction,
                 isCorrectionEnabled, sequenceNumber, locale, suggestionResults, mAutoCorrectionThreshold,
-                    keyboard.mId.mNumberRow, DEFAULT_MAX_AUTO_CORRECTION_LENGTH_DELTA)
+                    keyboard.mId.mNumberRow, DEFAULT_MAX_AUTO_CORRECTION_LENGTH_DELTA,
+                    mDictionaryFacilitator.isValidSpellingWord(wordComposer.getTypedWord()))
         );
     }
 
@@ -475,6 +487,25 @@ public final class Suggest {
      * @param info the suggestion info
      * @return whether it's fine to auto-correct to this.
      */
+    private static int levenshteinDistance(final String s1, final String s2) {
+        final int len1 = s1.length();
+        final int len2 = s2.length();
+        final int[] prev = new int[len2 + 1];
+        final int[] curr = new int[len2 + 1];
+        for (int j = 0; j <= len2; j++) {
+            prev[j] = j;
+        }
+        for (int i = 1; i <= len1; i++) {
+            curr[0] = i;
+            for (int j = 1; j <= len2; j++) {
+                final int cost = (s1.charAt(i - 1) == s2.charAt(j - 1)) ? 0 : 1;
+                curr[j] = Math.min(Math.min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+            }
+            System.arraycopy(curr, 0, prev, 0, len2 + 1);
+        }
+        return prev[len2];
+    }
+
     private static boolean isAllowedByAutoCorrectionWithSpaceFilter(final SuggestedWordInfo info) {
         final Locale locale = (info.mSourceDict != null) ? info.mSourceDict.mLocale : null;
         if (null == locale) {

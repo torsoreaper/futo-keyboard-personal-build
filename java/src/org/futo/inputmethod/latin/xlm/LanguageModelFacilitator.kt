@@ -395,7 +395,8 @@ public class LanguageModelFacilitator(
             suggestionResults,
             settingsValues.mAutoCorrectionThreshold,
             settingsValues.mIsNumberRowEnabled,
-            context.getSetting(AutocorrectMaxLengthDeltaSetting)
+            context.getSetting(AutocorrectMaxLengthDeltaSetting),
+            dictionaryFacilitator.isValidSpellingWord(values.composedData.mTypedWord)
         )
 
 
