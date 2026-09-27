@@ -44,6 +44,9 @@ public final class InputAttributes {
 
     final public String mTargetApplicationPackageName;
     final public boolean mInputTypeNoAutoCorrect;
+    // Same as mInputTypeNoAutoCorrect, but ignores a plain TYPE_TEXT_FLAG_NO_SUGGESTIONS request.
+    // Used when the user wants auto-correction even in "no suggestions" fields (e.g. search boxes).
+    final public boolean mInputTypeNoAutoCorrectUnlessNoSuggestions;
     final public boolean mIsPasswordField;
     final public boolean mIsNumericalPasswordField;
     final public boolean mIsEmailField;
@@ -103,6 +106,7 @@ public final class InputAttributes {
             }
             mShouldShowSuggestions = false;
             mInputTypeNoAutoCorrect = false;
+            mInputTypeNoAutoCorrectUnlessNoSuggestions = false;
             mApplicationSpecifiedCompletionOn = false;
             mShouldInsertSpacesAutomatically = false;
             mDisableGestureFloatingPreviewText = false;
@@ -152,6 +156,15 @@ public final class InputAttributes {
                 || InputType.TYPE_TEXT_VARIATION_URI == variation
                 || InputType.TYPE_TEXT_VARIATION_FILTER == variation
                 || (flagNoSuggestions && !flagAutoCorrect && variation != InputType.TYPE_TEXT_VARIATION_WEB_EDIT_TEXT)
+                || mIsCodeField;
+
+        // Like the above, but a bare NO_SUGGESTIONS request is not honored. Password, email, URI,
+        // filter and code fields are still excluded; a plain search/text field that only asks for
+        // "no suggestions" is allowed to auto-correct when the user opts in.
+        mInputTypeNoAutoCorrectUnlessNoSuggestions = shouldSuppressSuggestions
+                || InputTypeUtils.isEmailVariation(variation)
+                || InputType.TYPE_TEXT_VARIATION_URI == variation
+                || InputType.TYPE_TEXT_VARIATION_FILTER == variation
                 || mIsCodeField;
 
         // TODO: Firefox-based browsers don't set it to WEB_EDIT_TEXT

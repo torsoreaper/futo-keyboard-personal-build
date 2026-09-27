@@ -34,6 +34,11 @@ import org.futo.inputmethod.latin.uix.getSetting
 import org.futo.inputmethod.latin.utils.SuggestionResults
 import kotlin.math.ceil
 
+// Bottom-row letters that can be a mistyped space bar when splitting a run-together token.
+// c/v/b/n sit directly above the space bar; z/x/m are the outer keys of the same row.
+private const val SPACE_SPLIT_STRONG_KEYS = "cvbn"
+private const val SPACE_SPLIT_WEAK_KEYS = "zxm"
+
 
 val AutocorrectThresholdSetting = SettingsKey(
     floatPreferencesKey("lm_autocorrect_threshold"),
@@ -280,6 +285,43 @@ public class LanguageModelFacilitator(
             suggestionBlacklist.isSuggestedWordOk(it)
         }.toMutableList()
 
+        // The native dictionary can already split a run-together token at a key that was probably
+        // meant to be the space bar (e.g. "laxybdogz" -> "lazy dogs"). Its score is usually low, so
+        // the LM merge below would otherwise discard it. When the typed word is not itself a word
+        // and the dictionary offers a two-word split of the same length, prefer that split. Only
+        // splits where the space replaced one of the bottom-row keys are considered: c/v/b/n sit
+        // right above the space bar (strong), while z/x/m are the row's outer keys (weaker).
+        val typedWordForSplit = values.composedData.mTypedWord
+        val lowerTypedWordForSplit = typedWordForSplit.lowercase()
+        val spaceSplitCandidate: SuggestedWordInfo? = if (typedWordForSplit.length > 3
+                && !dictionaryFacilitator.isValidSpellingWord(typedWordForSplit)) {
+            suggestedWordsDictList.filter {
+                val word = it.word
+                if (word.count { c -> c == ' ' } != 1) return@filter false
+                if (Math.abs(word.length - typedWordForSplit.length) > 1) return@filter false
+                val left = word.substringBefore(' ')
+                val right = word.substringAfter(' ')
+                if (left.length < 2 || right.length < 2) return@filter false
+                // mIndexOfTouchPointOfSecondWord is the input index of the second word's first
+                // letter, so the key before it is the one the space replaced.
+                val secondWordInputIndex = it.mIndexOfTouchPointOfSecondWord
+                if (secondWordInputIndex <= 0 || secondWordInputIndex > lowerTypedWordForSplit.length) {
+                    return@filter false
+                }
+                val spaceKey = lowerTypedWordForSplit[secondWordInputIndex - 1]
+                when {
+                    SPACE_SPLIT_STRONG_KEYS.indexOf(spaceKey) >= 0 -> true
+                    // The outer keys are weaker evidence, so only split there when the first half
+                    // is already a real word.
+                    SPACE_SPLIT_WEAK_KEYS.indexOf(spaceKey) >= 0 ->
+                        dictionaryFacilitator.isValidSpellingWord(left.lowercase())
+                    else -> false
+                }
+            }.maxByOrNull { it.mScore }
+        } else {
+            null
+        }
+
         var maxWordDict = suggestedWordsDictList.maxByOrNull {
             if(it == suggestedWordsDict.typedWordInfo
                 || it.isKindOf(SuggestedWordInfo.KIND_EMOJI_SUGGESTION)) Int.MIN_VALUE else it.mScore
@@ -334,10 +376,28 @@ public class LanguageModelFacilitator(
             }
         }
 
+        if(spaceSplitCandidate != null) {
+            // Promote the dictionary's two-word split so it becomes the top suggestion and can be
+            // committed by pressing space. MAX_SCORE keeps it ahead of the LM single words, and
+            // the auto-correction flag lets it pass the threshold check.
+            if(BuildConfig.DEBUG) Log.d(TAG, "promoting space-split suggestion: ${spaceSplitCandidate.word}")
+            suggestionResults.add(SuggestedWordInfo(
+                spaceSplitCandidate.word,
+                spaceSplitCandidate.mPrevWordsContext,
+                SuggestedWordInfo.MAX_SCORE,
+                SuggestedWordInfo.KIND_FLAG_APPROPRIATE_FOR_AUTO_CORRECTION or SuggestedWordInfo.KIND_CORRECTION,
+                spaceSplitCandidate.mSourceDict,
+                spaceSplitCandidate.mIndexOfTouchPointOfSecondWord,
+                spaceSplitCandidate.mAutoCommitFirstWordConfidence
+            ))
+            if(!filtered.contains(spaceSplitCandidate)) filtered.add(spaceSplitCandidate)
+        }
+
         // Add reweightedSuggestions, with space replacement logic. It can replace one of the LM
         // suggestions if the top dictionary result has a space, based on heuristics about the
         // relative quality of the LM suggestion
-        val spaceReplacementPossible = maxWordDict != null && maxWordDict.word.count { it == ' ' } == 1
+        val spaceReplacementPossible = spaceSplitCandidate == null
+                && maxWordDict != null && maxWordDict.word.count { it == ' ' } == 1
         var spaceReplacementPerformed = false
         for(i in 0 until reweightedSuggestions.size) {
             val word = reweightedSuggestions[i]

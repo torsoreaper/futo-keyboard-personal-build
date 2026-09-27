@@ -283,7 +283,8 @@ public final class Suggest {
                             <= MAX_TYPO_EDIT_DISTANCE) {
                 // The typed word isn't a known word and the top candidate is a close match,
                 // so this is a typo: correct it without requiring full confidence.
-                hasAutoCorrection = isAllowedByAutoCorrectionWithSpaceFilter(firstSuggestion);
+                hasAutoCorrection = isAllowedByAutoCorrectionWithSpaceFilter(
+                        consideredWord, firstSuggestion);
             } else if (!AutoCorrectionUtils.suggestionExceedsThreshold(
                     firstSuggestion, consideredWord, autoCorrectionThreshold)) {
                 // Score is too low for autocorrect
@@ -293,7 +294,8 @@ public final class Suggest {
                 // form to allow auto-correcting to it in this language. For details of how this
                 // is determined, see #isAllowedByAutoCorrectionWithSpaceFilter.
                 // TODO: this should not have its own logic here but be handled by the dictionary.
-                hasAutoCorrection = isAllowedByAutoCorrectionWithSpaceFilter(firstSuggestion);
+                hasAutoCorrection = isAllowedByAutoCorrectionWithSpaceFilter(
+                        consideredWord, firstSuggestion);
             }
         }
 
@@ -301,11 +303,29 @@ public final class Suggest {
             final SuggestedWordInfo decisionTop = suggestionResults.first();
             Log.d(TAG, "autocorrect decision: hasAutoCorrection=" + hasAutoCorrection
                     + " typed=" + typedWordString
+                    + " considered=" + consideredWord
                     + " top=" + decisionTop.mWord
                     + " score=" + decisionTop.mScore
                     + " kind=" + decisionTop.mKindAndFlags
                     + " threshold=" + autoCorrectionThreshold
-                    + " maxDelta=" + maxAutoCorrectionLengthDelta);
+                    + " maxDelta=" + maxAutoCorrectionLengthDelta
+                    + " typedKnown=" + isTypedWordKnown
+                    + " typedIndex=" + firstOcurrenceOfTypedWordInSuggestions
+                    + " allows=" + allowsToBeAutoCorrected
+                    + " whitelist=" + whitelistedWord
+                    + " srcDictRemoved=" + (sourceDictionaryOfRemovedWord != null)
+                    + " [guard: corrEnabled=" + isCorrectionEnabled
+                    + " isPred=" + resultsArePredictions
+                    + " dashes=" + wordComposer.hasDashes()
+                    + " digits=" + (wordComposer.hasDigits() && !numberRowActive)
+                    + " allDigits=" + wordComposer.isEntirelyDigits()
+                    + " startsDigit=" + wordComposer.startsWithDigit()
+                    + " attachedNonWord=" + wordComposer.isAttachedToNonWord()
+                    + " mostlyCaps=" + wordComposer.isMostlyCaps()
+                    + " resumed=" + wordComposer.isResumed()
+                    + " rejectedSwipe=" + (wordComposer.getRejectedBatchModeSuggestion() != null)
+                    + " shortcut=" + suggestionResults.first().isKindOf(SuggestedWordInfo.KIND_SHORTCUT)
+                    + " url=" + StringUtils.lastPartLooksLikeURL(typedWordString) + "]");
         }
 
         final SuggestedWordInfo typedWordInfo = new SuggestedWordInfo(typedWordString,
@@ -506,7 +526,27 @@ public final class Suggest {
         return prev[len2];
     }
 
-    private static boolean isAllowedByAutoCorrectionWithSpaceFilter(final SuggestedWordInfo info) {
+    // Bottom-row letters that can stand in for the space bar when a run-together token is split
+    // into two words. c/v/b/n are directly above the space bar (strong); z/x/m are the outer keys.
+    private static final String SPACE_SPLIT_STRONG_KEYS = "cvbn";
+    private static final String SPACE_SPLIT_WEAK_KEYS = "zxm";
+
+    private static boolean isAllowedByAutoCorrectionWithSpaceFilter(
+            final String typedWord, final SuggestedWordInfo info) {
+        // If the suggestion contains a space, only allow it when that space replaced one of the
+        // bottom-row keys (e.g. "laxybdogz" -> "lazy dogs", with the space standing in for 'b').
+        // This prevents committing odd splits at unrelated keys (e.g. "helloyhere" -> "helot here").
+        if (info.mWord.indexOf(Constants.CODE_SPACE) >= 0) {
+            final int secondWordInputIndex = info.mIndexOfTouchPointOfSecondWord;
+            if (secondWordInputIndex <= 0 || secondWordInputIndex > typedWord.length()) {
+                return false;
+            }
+            final char splitKey = Character.toLowerCase(typedWord.charAt(secondWordInputIndex - 1));
+            if (SPACE_SPLIT_STRONG_KEYS.indexOf(splitKey) < 0
+                    && SPACE_SPLIT_WEAK_KEYS.indexOf(splitKey) < 0) {
+                return false;
+            }
+        }
         final Locale locale = (info.mSourceDict != null) ? info.mSourceDict.mLocale : null;
         if (null == locale) {
             return true;
