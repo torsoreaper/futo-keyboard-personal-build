@@ -691,18 +691,38 @@ public final class Suggest {
 
     private static boolean isAllowedByAutoCorrectionWithSpaceFilter(
             final String typedWord, final SuggestedWordInfo info) {
-        // If the suggestion contains a space, only allow it when that space replaced one of the
-        // bottom-row keys (e.g. "laxybdogz" -> "lazy dogs", with the space standing in for 'b').
+        // If the suggestion contains spaces, only allow it when each space replaced one of the
+        // bottom-row keys (e.g. "laxybdogz" -> "lazy dogs", "justnfornthe" -> "just for the").
         // This prevents committing odd splits at unrelated keys (e.g. "helloyhere" -> "helot here").
         if (info.mWord.indexOf(Constants.CODE_SPACE) >= 0) {
-            final int secondWordInputIndex = info.mIndexOfTouchPointOfSecondWord;
-            if (secondWordInputIndex <= 0 || secondWordInputIndex > typedWord.length()) {
-                return false;
-            }
-            final char splitKey = Character.toLowerCase(typedWord.charAt(secondWordInputIndex - 1));
-            if (SPACE_SPLIT_STRONG_KEYS.indexOf(splitKey) < 0
-                    && SPACE_SPLIT_WEAK_KEYS.indexOf(splitKey) < 0) {
-                return false;
+            if (info.mWord.length() == typedWord.length()) {
+                // Line the suggestion up against what was typed: it is the typed word with some
+                // keys turned into spaces, so every space must sit on an allowed key. Comparing
+                // positions rather than relying on mIndexOfTouchPointOfSecondWord is what makes
+                // several spaces work, and it does not depend on a field that merge-cloned
+                // suggestions reset to zero.
+                for (int i = 0; i < typedWord.length(); i++) {
+                    if (info.mWord.charAt(i) != Constants.CODE_SPACE) {
+                        continue;
+                    }
+                    final char splitKey = Character.toLowerCase(typedWord.charAt(i));
+                    if (SPACE_SPLIT_STRONG_KEYS.indexOf(splitKey) < 0
+                            && SPACE_SPLIT_WEAK_KEYS.indexOf(splitKey) < 0) {
+                        return false;
+                    }
+                }
+            } else {
+                // The suggestion inserted or dropped characters, so fall back to the recorded
+                // input index of the second word.
+                final int secondWordInputIndex = info.mIndexOfTouchPointOfSecondWord;
+                if (secondWordInputIndex <= 0 || secondWordInputIndex > typedWord.length()) {
+                    return false;
+                }
+                final char splitKey = Character.toLowerCase(typedWord.charAt(secondWordInputIndex - 1));
+                if (SPACE_SPLIT_STRONG_KEYS.indexOf(splitKey) < 0
+                        && SPACE_SPLIT_WEAK_KEYS.indexOf(splitKey) < 0) {
+                    return false;
+                }
             }
         }
         final Locale locale = (info.mSourceDict != null) ? info.mSourceDict.mLocale : null;

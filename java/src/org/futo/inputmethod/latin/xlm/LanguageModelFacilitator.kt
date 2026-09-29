@@ -144,6 +144,32 @@ internal fun SuggestedWordInfo.scoreAtMost(other: SuggestedWordInfo): SuggestedW
     return result
 }
 
+/**
+ * Whether every space in [candidate] sits on a bottom-row key in [typedWord], so that the split is
+ * plausibly a mistyped space bar rather than an unrelated two-word suggestion. [typedWord] and
+ * [candidate] must be the same length, i.e. the candidate is the typed word with keys replaced by
+ * spaces. Outer keys (z/x/m) are weaker evidence and additionally require the segment before them
+ * to already be a real word.
+ */
+private fun spaceSplitKeysAreAllowed(
+    typedWord: String,
+    candidate: String,
+    isValidWord: (String) -> Boolean
+): Boolean {
+    if (candidate.length != typedWord.length) return false
+    var segmentStart = 0
+    for (i in candidate.indices) {
+        if (candidate[i] != ' ') continue
+        val key = typedWord[i]
+        val strong = SPACE_SPLIT_STRONG_KEYS.indexOf(key) >= 0
+        val weak = SPACE_SPLIT_WEAK_KEYS.indexOf(key) >= 0
+        if (!strong && !weak) return false
+        if (weak && !isValidWord(typedWord.substring(segmentStart, i))) return false
+        segmentStart = i + 1
+    }
+    return true
+}
+
 private fun levenshteinDistance(s1: String, s2: String): Int {
     val len1 = s1.length
     val len2 = s2.length
@@ -333,25 +359,16 @@ public class LanguageModelFacilitator(
                 && !dictionaryFacilitator.isValidSpellingWord(typedWordForSplit)) {
             suggestedWordsDictList.filter {
                 val word = it.word
-                if (word.count { c -> c == ' ' } != 1) return@filter false
-                if (Math.abs(word.length - typedWordForSplit.length) > 1) return@filter false
-                val left = word.substringBefore(' ')
-                val right = word.substringAfter(' ')
-                if (left.length < 2 || right.length < 2) return@filter false
-                // mIndexOfTouchPointOfSecondWord is the input index of the second word's first
-                // letter, so the key before it is the one the space replaced.
-                val secondWordInputIndex = it.mIndexOfTouchPointOfSecondWord
-                if (secondWordInputIndex <= 0 || secondWordInputIndex > lowerTypedWordForSplit.length) {
-                    return@filter false
-                }
-                val spaceKey = lowerTypedWordForSplit[secondWordInputIndex - 1]
-                when {
-                    SPACE_SPLIT_STRONG_KEYS.indexOf(spaceKey) >= 0 -> true
-                    // The outer keys are weaker evidence, so only split there when the first half
-                    // is already a real word.
-                    SPACE_SPLIT_WEAK_KEYS.indexOf(spaceKey) >= 0 ->
-                        dictionaryFacilitator.isValidSpellingWord(left.lowercase())
-                    else -> false
+                if (!word.contains(' ')) return@filter false
+                // The candidate must be the typed word with some keys replaced by spaces, so the
+                // two line up position by position. This allows more than one space
+                // ("justnfornthe" -> "just for the"), which a single-index check could not.
+                if (word.length != typedWordForSplit.length) return@filter false
+                // Don't reduce a word to a fragment on either side.
+                if (word.substringBefore(' ').length < 2) return@filter false
+                if (word.substringAfterLast(' ').length < 2) return@filter false
+                spaceSplitKeysAreAllowed(lowerTypedWordForSplit, word.lowercase()) { candidate ->
+                    dictionaryFacilitator.isValidSpellingWord(candidate)
                 }
             }.maxByOrNull { it.mScore }
         } else {
