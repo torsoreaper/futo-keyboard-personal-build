@@ -12,6 +12,7 @@ import org.futo.inputmethod.latin.SuggestedWords
 import org.futo.inputmethod.latin.SuggestedWords.SuggestedWordInfo
 import org.futo.inputmethod.latin.common.ComposedData
 import org.futo.inputmethod.latin.settings.SettingsValuesForSuggestion
+import org.futo.inputmethod.latin.utils.DebugFileLogger
 import org.futo.inputmethod.latin.utils.JniUtils
 import java.util.Arrays
 import java.util.Locale
@@ -346,6 +347,13 @@ class LanguageModel(
         context = safeguardContext(context)
 
         context = addPersonalDictionary(context, personalDictionary)
+
+        // Record exactly what the model is given, so it is possible to tell whether a poor
+        // suggestion is the model ignoring context or the context never reaching it.
+        if (DebugFileLogger.isEnabled()) {
+            DebugFileLogger.log("LanguageModel partial=\"${composeInfo.partialWord}\"" +
+                    " context=\"${context.replace('\n', ' ')}\"")
+        }
 
         return@withContext getSuggestionsInternal(proximityInfoHandle, context, composeInfo, autocorrectThreshold, bannedWords)
     }

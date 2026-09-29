@@ -348,6 +348,10 @@ public final class Suggest {
                     + " typed=" + typedWordString
                     + " top=" + decisionTop.mWord
                     + " score=" + decisionTop.mScore
+                    + " kind=" + decisionTop.mKindAndFlags
+                    + " src=" + (decisionTop.mSourceDict == null
+                            ? "null" : decisionTop.mSourceDict.mDictType)
+                    + " idx2=" + decisionTop.mIndexOfTouchPointOfSecondWord
                     + " autoCorrect=" + hasAutoCorrection);
         }
 
