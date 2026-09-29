@@ -92,6 +92,7 @@ import org.futo.inputmethod.latin.uix.theme.applyWindowColors
 import org.futo.inputmethod.latin.uix.theme.getThemeOption
 import org.futo.inputmethod.latin.uix.theme.orDefault
 import org.futo.inputmethod.latin.uix.theme.presets.DefaultDarkScheme
+import org.futo.inputmethod.latin.utils.DebugFileLogger
 import org.futo.inputmethod.latin.utils.JniUtils
 import org.futo.inputmethod.updates.scheduleUpdateCheckingJob
 import org.futo.inputmethod.v2keyboard.ComputedKeyboardSize
@@ -393,6 +394,8 @@ class LatinIME : InputMethodServiceCompose(), LatinIMELegacy.SuggestionStripCont
         LayoutManager.init(this)
 
         DataStoreHelper.init(this)
+
+        DebugFileLogger.initialize(this)
 
         launchJob { seedBuiltinWordsIfNeeded() }
 

@@ -30,6 +30,7 @@ import org.futo.inputmethod.latin.define.DebugFlags;
 import org.futo.inputmethod.latin.settings.SettingsValuesForSuggestion;
 import org.futo.inputmethod.latin.utils.AutoCorrectionUtils;
 import org.futo.inputmethod.latin.utils.BinaryDictionaryUtils;
+import org.futo.inputmethod.latin.utils.DebugFileLogger;
 import org.futo.inputmethod.latin.utils.SuggestionResults;
 
 import java.util.ArrayList;
@@ -335,6 +336,15 @@ public final class Suggest {
                     + " rejectedSwipe=" + (wordComposer.getRejectedBatchModeSuggestion() != null)
                     + " shortcut=" + suggestionResults.first().isKindOf(SuggestedWordInfo.KIND_SHORTCUT)
                     + " url=" + StringUtils.lastPartLooksLikeURL(typedWordString) + "]");
+        } else if (DebugFileLogger.INSTANCE.isEnabled() && !suggestionResults.isEmpty()) {
+            // Compact per-keystroke record for the rotating file log: what was typed, what the
+            // keyboard decided to suggest, and whether it will be auto-corrected on space.
+            final SuggestedWordInfo decisionTop = suggestionResults.first();
+            DebugFileLogger.INSTANCE.log(TAG
+                    + " typed=" + typedWordString
+                    + " top=" + decisionTop.mWord
+                    + " score=" + decisionTop.mScore
+                    + " autoCorrect=" + hasAutoCorrection);
         }
 
         final SuggestedWordInfo typedWordInfo = new SuggestedWordInfo(typedWordString,

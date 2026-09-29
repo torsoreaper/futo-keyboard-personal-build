@@ -31,6 +31,7 @@ import org.futo.inputmethod.latin.settings.Settings
 import org.futo.inputmethod.latin.uix.SettingsKey
 import org.futo.inputmethod.latin.uix.USE_TRANSFORMER_FINETUNING
 import org.futo.inputmethod.latin.uix.getSetting
+import org.futo.inputmethod.latin.utils.DebugFileLogger
 import org.futo.inputmethod.latin.utils.SuggestionResults
 import kotlin.math.ceil
 
@@ -477,6 +478,9 @@ public class LanguageModelFacilitator(
         )
 
 
+        // The full candidate dump is expensive to build (it stringifies every LM and dictionary
+        // candidate on every keystroke), so it is only produced for debug builds. The file logger
+        // records the compact summary below instead.
         if(BuildConfig.DEBUG) {
             val dmpw: (SuggestedWordInfo?) -> String = { v -> v?.let { "${it.mWord}:${it.mScore}:${it.mKindAndFlags}:${it.mSourceDict?.mDictType}" } ?: "[null]" }
             val dmp: (List<SuggestedWordInfo>?) -> String = { v -> v?.joinToString { dmpw(it) } ?: "[null]" }
@@ -489,6 +493,19 @@ public class LanguageModelFacilitator(
                     "max word lm: ${dmpw(maxWord)}}\n" +
                     "max word dict: ${dmpw(maxWordDict)}}\n"
             )
+        }
+
+        // A cheap per-keystroke summary for the rotating file log: just what the keyboard decided
+        // to suggest and why, without the full candidate list.
+        if(DebugFileLogger.isEnabled()) {
+            val dmpw: (SuggestedWordInfo?) -> String = { v -> v?.let { "${it.mWord}(${it.mScore})" } ?: "[null]" }
+            DebugFileLogger.log(TAG +
+                    " merge: typed=${values.composedData.mTypedWord}" +
+                    " lmTop=${dmpw(maxWord)}" +
+                    " dictTop=${dmpw(maxWordDict)}" +
+                    " lmSuggestions=${lmSuggestions.size}" +
+                    " dictCandidates=${suggestedWordsDictList.size}" +
+                    " finalSuggestions=${suggestedWords.mSuggestedWordInfoList.size}")
         }
 
 

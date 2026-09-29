@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Exposes the rotating debug log files so they can be shared through the system share sheet. -->
+<paths>
+    <files-path
+        name="debuglogs"
+        path="debuglogs/" />
+</paths>
