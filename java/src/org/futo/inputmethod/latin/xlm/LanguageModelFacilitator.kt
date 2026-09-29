@@ -40,6 +40,11 @@ import kotlin.math.ceil
 private const val SPACE_SPLIT_STRONG_KEYS = "cvbn"
 private const val SPACE_SPLIT_WEAK_KEYS = "zxm"
 
+// When the dictionary has no useful opinion (its best candidate scores below zero) we fall back to
+// the transformer, but only when the transformer is reasonably sure. Observed confident
+// corrections such as "gjthun" -> "GitHub" score around 1.4M.
+private const val MIN_TRANSFORMER_AUTOCORRECT_SCORE = 500_000
+
 
 val AutocorrectThresholdSetting = SettingsKey(
     floatPreferencesKey("lm_autocorrect_threshold"),
@@ -94,6 +99,21 @@ internal fun SuggestedWordInfo.scoreAtLeast(other: SuggestedWordInfo): Suggested
         0
     )
 
+    return result
+}
+
+/** Same word, re-scored, and marked as appropriate for auto-correction. */
+internal fun SuggestedWordInfo.copyAs(newScore: Int): SuggestedWordInfo {
+    val result = SuggestedWordInfo(
+        mWord,
+        mPrevWordsContext,
+        newScore,
+        SuggestedWordInfo.KIND_WHITELIST or SuggestedWordInfo.KIND_FLAG_APPROPRIATE_FOR_AUTO_CORRECTION,
+        mSourceDict,
+        0,
+        0
+    )
+    result.mOriginatesFromTransformerLM = mOriginatesFromTransformerLM
     return result
 }
 
@@ -348,9 +368,24 @@ public class LanguageModelFacilitator(
 
         val bothAlgorithmsCameToSameConclusion = maxWordDict?.mWord == maxWord?.mWord
 
+        // A negative dictionary score means the dictionary had no real opinion: it is only
+        // suggesting that word because it ran out of plausible candidates. That is not the same
+        // as disagreeing with the language model, so when the transformer is confident about a
+        // word we should keep it rather than discarding it for lack of a second opinion. Without
+        // this, typos the dictionary cannot help with (e.g. "gjthun" -> "GitHub") get suggested
+        // but never commit on space.
+        val dictionaryHasNoOpinion = maxWordDict == null || maxWordDict.mScore < 0
+        val transformerIsConfident = maxWord != null && maxWord.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE
+
         var autocorrectWord: SuggestedWordInfo? = null
         val filtered = mutableListOf<SuggestedWordInfo>()
-        if(bothAlgorithmsCameToSameConclusion && maxWord != null && maxWordDict != null){
+        if(dictionaryHasNoOpinion && transformerIsConfident) {
+            if(BuildConfig.DEBUG) Log.d(TAG, "dictionary has no opinion, trusting transformer: autocorrect to ${maxWord!!.mWord}")
+            // Score the transformer's word above everything so it sits in the auto-correction slot.
+            val clone = maxWord!!.copyAs(SuggestedWordInfo.MAX_SCORE)
+            autocorrectWord = clone
+            suggestionResults.add(clone)
+        } else if(bothAlgorithmsCameToSameConclusion && maxWord != null && maxWordDict != null){
             if(BuildConfig.DEBUG) Log.d(TAG, "both algorithms came to same conclusion, autocorrect to ${maxWord.mWord}")
             // We can be pretty confident about autocorrecting this
             val clone = maxWord.add(maxWordDict)

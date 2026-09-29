@@ -336,9 +336,13 @@ public final class Suggest {
                     + " rejectedSwipe=" + (wordComposer.getRejectedBatchModeSuggestion() != null)
                     + " shortcut=" + suggestionResults.first().isKindOf(SuggestedWordInfo.KIND_SHORTCUT)
                     + " url=" + StringUtils.lastPartLooksLikeURL(typedWordString) + "]");
-        } else if (DebugFileLogger.INSTANCE.isEnabled() && !suggestionResults.isEmpty()) {
-            // Compact per-keystroke record for the rotating file log: what was typed, what the
-            // keyboard decided to suggest, and whether it will be auto-corrected on space.
+        }
+
+        // Compact per-keystroke record for the rotating file log: what was typed, what the
+        // keyboard decided to suggest, and whether it will be auto-corrected on space. This is
+        // deliberately independent of DBG, which is enabled in debug builds and would otherwise
+        // make this branch unreachable.
+        if (DebugFileLogger.INSTANCE.isEnabled() && !suggestionResults.isEmpty()) {
             final SuggestedWordInfo decisionTop = suggestionResults.first();
             DebugFileLogger.INSTANCE.log(TAG
                     + " typed=" + typedWordString
