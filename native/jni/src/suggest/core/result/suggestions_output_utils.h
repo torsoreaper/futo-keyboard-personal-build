@@ -57,8 +57,8 @@ class SuggestionsOutputUtils {
             const bool forceCommitMultiWords, const bool outputSecondWordFirstLetterInputIndex,
             SuggestionResults *const outSuggestionResults);
     static void outputShortcuts(BinaryDictionaryShortcutIterator *const shortcutIt,
-            const int finalScore, const bool sameAsTyped,
-            SuggestionResults *const outSuggestionResults);
+            const int finalScore, const bool sameAsTyped, const bool typedWordIsAWord,
+            const int outputTypeFlags, SuggestionResults *const outSuggestionResults);
     static int computeFirstWordConfidence(const DicNode *const terminalDicNode);
 };
 } // namespace latinime

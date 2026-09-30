@@ -18,7 +18,6 @@ import org.futo.inputmethod.keyboard.Keyboard
 import org.futo.inputmethod.keyboard.KeyboardSwitcher
 import org.futo.inputmethod.latin.BinaryDictionary
 import org.futo.inputmethod.latin.BuildConfig
-import org.futo.inputmethod.latin.Dictionary
 import org.futo.inputmethod.latin.DictionaryFacilitator
 import org.futo.inputmethod.latin.NgramContext
 import org.futo.inputmethod.latin.Suggest
@@ -28,7 +27,6 @@ import org.futo.inputmethod.latin.SuggestionBlacklist
 import org.futo.inputmethod.latin.common.ComposedData
 import org.futo.inputmethod.latin.inputlogic.InputLogic
 import org.futo.inputmethod.latin.settings.Settings
-import org.futo.inputmethod.latin.uix.BuiltinWordList
 import org.futo.inputmethod.latin.uix.SettingsKey
 import org.futo.inputmethod.latin.uix.USE_TRANSFORMER_FINETUNING
 import org.futo.inputmethod.latin.uix.getSetting
@@ -45,19 +43,6 @@ private const val SPACE_SPLIT_WEAK_KEYS = "zxm"
 // the transformer, but only when the transformer is reasonably sure. Observed confident
 // corrections such as "gjthun" -> "GitHub" score around 1.4M.
 private const val MIN_TRANSFORMER_AUTOCORRECT_SCORE = 500_000
-
-// How close a user-history word must be to what was typed before it may outrank the language
-// model. Kept loose enough for a mis-typed personal name; the real guard is that the model must
-// not already have a real word of its own.
-private const val MAX_USER_HISTORY_TYPO_DISTANCE = 3
-
-// The built-in word list is seeded into the user dictionary so that the dictionary recognises
-// those words. It must not be sent to the language model as personal vocabulary: there are around
-// 150 entries, and prepending them to every request buries the real sentence context under a wall
-// of swearing and medicine names.
-private val BUILTIN_WORDS_LOWER: Set<String> =
-    BuiltinWordList.ALL.map { it.lowercase() }.toHashSet()
-
 
 val AutocorrectThresholdSetting = SettingsKey(
     floatPreferencesKey("lm_autocorrect_threshold"),
@@ -271,14 +256,13 @@ public class LanguageModelFacilitator(
         val autocorrectThreshold = context.getSetting(AutocorrectThresholdSetting)
 
         try {
+            // The personal dictionary is a dictionary source, exactly like the built-in
+            // dictionaries; it is deliberately not injected into the model's context any more.
             return languageModel?.getSuggestions(
                 values.composedData,
                 values.ngramContext,
                 proximityInfoHandle,
                 autocorrectThreshold,
-                userDictionary.getWords(listOf(locale)).map { it.word }.filterNot {
-                    it.lowercase() in BUILTIN_WORDS_LOWER
-                },
                 arrayOf()
             )
         }catch (e: ModelLoadingException) {
@@ -506,28 +490,10 @@ public class LanguageModelFacilitator(
             suggestionResults.add(word)
         }
 
-        // A word the user has typed before is offered more strongly, so that personal words the
-        // language model does not know (names, jargon) get corrected reliably. It must only
-        // outrank the model when the model has not found a real word of its own: otherwise an
-        // unrelated history entry hijacks a correct suggestion (history "got" was replacing the
-        // model's correct "for", and "find" was replacing "tune").
-        val historyCandidate = maxWordDict
-        val transformerFoundARealWord = maxWord != null
-                && dictionaryFacilitator.isValidSpellingWord(maxWord.mWord)
-        val historyIsRelevantToTypedWord = historyCandidate != null
-                && typedWordForSplit.isNotEmpty()
-                && levenshteinDistance(historyCandidate.mWord.lowercase(),
-                        typedWordForSplit.lowercase()) <= MAX_USER_HISTORY_TYPO_DISTANCE
-        if(historyIsRelevantToTypedWord
-            && !transformerFoundARealWord
-            && historyCandidate?.mSourceDict?.mDictType == Dictionary.TYPE_USER_HISTORY
-            && historyCandidate.mScore > 100
-            && maxWord != null
-        ) {
-            if(BuildConfig.DEBUG) Log.d(TAG, "type user history found")
-            val clone = historyCandidate.scoreAtLeast(maxWord)
-            suggestionResults.add(clone)
-        }
+        // Learned user words are ordinary dictionary candidates: they are already suggested by
+        // the history dictionary with their own score, so they are not promoted above the
+        // language model here. (Before, a relevant history word was cloned above the model
+        // whenever the model had no real word of its own.)
 
         suggestionResults.mRawSuggestions?.addAll(reweightedSuggestions.filter { !filtered.contains(it) })
         if(transformerWeight != Float.POSITIVE_INFINITY) {

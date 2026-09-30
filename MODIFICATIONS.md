@@ -42,23 +42,38 @@ part of the official FUTO Keyboard.
 6. **Per-token normalised probabilities** in the native language model, a wider
    correction beam, a typo prior, and a two-word context.
 
+7. **Allowlist corrections no longer override the language model.** The built-in
+   allowlist forces a correction when a curated form is typed (`tine` → `time`,
+   `hoe` → `how`, `ill` → `I'll`). It used to be emitted with the maximum possible
+   score and a kind that skipped the auto-correction threshold, so it beat the
+   language model's reading of the sentence by arithmetic alone. When the typed
+   form is itself a real word it is now emitted as an ordinary dictionary
+   correction: it competes on score and goes through the same thresholds. Allowlist
+   entries whose typed form is *not* a real word (`alot` → `a lot`, `i` → `I`) still
+   correct unconditionally, because there is no legitimate word to compete with.
+
 ## Changes to personalisation
 
-7. **Built-in word list.** Common profanity and over-the-counter medicine names
+8. **Built-in word list.** Common profanity and over-the-counter medicine names
    are seeded into the user dictionary once so they are recognised as words.
-   They are deliberately excluded from the glossary sent to the language model,
-   which otherwise swamps the sentence context.
 
-8. **User-history suggestions can no longer hijack the language model.** A word
-   learned from history may only outrank the model when the model has not found
-   a real word of its own.
+9. **Custom (personal-dictionary) words are ordinary dictionary words.** The
+   personal dictionary used to be prepended to every transformer request as a
+   `(Glossary: ...)` prefix, which biased the model toward those words and let them
+   override the sentence context. It is now only a dictionary source, exactly like
+   the built-in dictionaries.
+
+10. **Learned words are ordinary dictionary candidates.** A word learned from
+   typing history used to be cloned above the language model whenever the model had
+   no real word of its own. That promotion is removed; history words now compete on
+   their own score like any other dictionary entry.
 
 ## Added tooling
 
-9. **Rotating on-device debug log.** A 250 MB log (5 MB chunks, oldest
-   overwritten) in the app's private storage, which survives the keyboard being
-   killed. It records what was typed, the top suggestion and its source, and
-   whether it will auto-correct. Controlled from Settings → Miscellaneous.
+11. **Rotating on-device debug log.** A 250 MB log (5 MB chunks, oldest
+    overwritten) in the app's private storage, which survives the keyboard being
+    killed. It records what was typed, the top suggestion and its source, and
+    whether it will auto-correct. Controlled from Settings → Miscellaneous.
 
 ## Reporting problems
 

@@ -161,31 +161,10 @@ class LanguageModel(
         return context
     }
 
-    private fun addPersonalDictionary(ctx: String, personalDictionary: List<String>) : String {
-        var context = ctx
-
-        if (personalDictionary.isNotEmpty()) {
-            val glossary = StringBuilder()
-            for (s in personalDictionary) {
-                glossary.append(s.trim { it <= ' ' }).append(", ")
-            }
-            if (glossary.length > 2) {
-                context = """
-                    (Glossary: ${glossary.substring(0, glossary.length - 2)})
-                    
-                    $context
-                    """.trimIndent()
-            }
-        }
-
-        return context
-    }
-
     suspend fun rescoreSuggestions(
         suggestedWords: SuggestedWords,
         composedData: ComposedData,
         ngramContext: NgramContext,
-        personalDictionary: List<String>,
     ): List<SuggestedWordInfo>? = withContext(LanguageModelScope) {
         if (mNativeState == 0L) {
             loadModel()
@@ -206,7 +185,6 @@ class LanguageModel(
 
         composeInfo = safeguardComposeInfo(composeInfo)
         context = safeguardContext(context)
-        context = addPersonalDictionary(context, personalDictionary)
 
         val wordStrings = suggestedWords.mSuggestedWordInfoList.map { it.mWord }.toTypedArray()
         val wordScoresInput = suggestedWords.mSuggestedWordInfoList.map { it.mScore }.toTypedArray().toIntArray()
@@ -335,7 +313,6 @@ class LanguageModel(
         ngramContext: NgramContext,
         proximityInfoHandle: Long,
         autocorrectThreshold: Float,
-        personalDictionary: List<String>,
         bannedWords: Array<String>
     ): ArrayList<SuggestedWordInfo>? = withContext(LanguageModelScope) {
         if(!loadModelIfNeeded()) return@withContext null
@@ -345,8 +322,6 @@ class LanguageModel(
 
         composeInfo = safeguardComposeInfo(composeInfo)
         context = safeguardContext(context)
-
-        context = addPersonalDictionary(context, personalDictionary)
 
         // Record exactly what the model is given, so it is possible to tell whether a poor
         // suggestion is the model ignoring context or the context never reaching it.

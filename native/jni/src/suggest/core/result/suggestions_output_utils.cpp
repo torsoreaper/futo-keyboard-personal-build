@@ -192,7 +192,8 @@ const int SuggestionsOutputUtils::MIN_LEN_FOR_MULTI_WORD_AUTOCORRECT = 16;
                 traverseSession->getDictionaryStructurePolicy()->getShortcutIterator(
                         terminalDicNode->getWordId());
         const bool sameAsTyped = scoringPolicy->sameAsTyped(traverseSession, terminalDicNode);
-        outputShortcuts(&shortcutIt, finalScore, sameAsTyped, outSuggestionResults);
+        outputShortcuts(&shortcutIt, finalScore, sameAsTyped, isValidWord, outputTypeFlags,
+                outSuggestionResults);
     }
 }
 
@@ -250,7 +251,8 @@ const int SuggestionsOutputUtils::MIN_LEN_FOR_MULTI_WORD_AUTOCORRECT = 16;
 
 /* static */ void SuggestionsOutputUtils::outputShortcuts(
         BinaryDictionaryShortcutIterator *const shortcutIt, const int finalScore,
-        const bool sameAsTyped, SuggestionResults *const outSuggestionResults) {
+        const bool sameAsTyped, const bool typedWordIsAWord, const int outputTypeFlags,
+        SuggestionResults *const outSuggestionResults) {
     int shortcutTarget[MAX_WORD_LENGTH];
     while (shortcutIt->hasNextShortcutTarget()) {
         bool isWhilelist;
@@ -259,9 +261,21 @@ const int SuggestionsOutputUtils::MIN_LEN_FOR_MULTI_WORD_AUTOCORRECT = 16;
                 &shortcutTargetStringLength, &isWhilelist);
         int shortcutScore;
         int kind;
-        if (isWhilelist && sameAsTyped) {
+        if (isWhilelist && sameAsTyped && !typedWordIsAWord) {
+            // The typed word is not a real word and the dictionary has a curated correction
+            // for it (e.g. "alot" -> "a lot", "i" -> "I"). Keep the override: there is no
+            // legitimate word to compete with, this is a plain typo.
             shortcutScore = S_INT_MAX;
             kind = Dictionary::KIND_WHITELIST;
+        } else if (isWhilelist && sameAsTyped) {
+            // The typed word is itself a valid word and the allowlist has a correction for it
+            // (e.g. "tine" -> "time", "hoe" -> "how", "ill" -> "I'll"). This is not the same
+            // kind of evidence as the language model reasoning over the sentence context, so
+            // do not let it override by arithmetic: emit it as an ordinary dictionary
+            // correction that competes on score and goes through the normal auto-correction
+            // thresholds.
+            shortcutScore = finalScore;
+            kind = Dictionary::KIND_CORRECTION | outputTypeFlags;
         } else {
             // shortcut entry's score == its base entry's score - 1
             shortcutScore = finalScore;
