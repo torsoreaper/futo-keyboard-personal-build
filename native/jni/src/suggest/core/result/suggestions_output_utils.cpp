@@ -261,21 +261,21 @@ const int SuggestionsOutputUtils::MIN_LEN_FOR_MULTI_WORD_AUTOCORRECT = 16;
                 &shortcutTargetStringLength, &isWhilelist);
         int shortcutScore;
         int kind;
-        if (isWhilelist && sameAsTyped && !typedWordIsAWord) {
-            // The typed word is not a real word and the dictionary has a curated correction
-            // for it (e.g. "alot" -> "a lot", "i" -> "I"). Keep the override: there is no
-            // legitimate word to compete with, this is a plain typo.
+        if (isWhilelist && sameAsTyped) {
+            // The dictionary has a curated correction for the typed form (e.g. "tine" -> "time",
+            // "alot" -> "a lot"). Make it the dictionary's top candidate in both cases, but the
+            // kind decides whether it may override the sentence context:
             shortcutScore = S_INT_MAX;
-            kind = Dictionary::KIND_WHITELIST;
-        } else if (isWhilelist && sameAsTyped) {
-            // The typed word is itself a valid word and the allowlist has a correction for it
-            // (e.g. "tine" -> "time", "hoe" -> "how", "ill" -> "I'll"). This is not the same
-            // kind of evidence as the language model reasoning over the sentence context, so
-            // do not let it override by arithmetic: emit it as an ordinary dictionary
-            // correction that competes on score and goes through the normal auto-correction
-            // thresholds.
-            shortcutScore = finalScore;
-            kind = Dictionary::KIND_CORRECTION | outputTypeFlags;
+            kind = typedWordIsAWord
+                    // The typed form is itself a valid word ("tine", "hoe", "ill"). Do not give
+                    // it the allowlist kind: that kind bypasses the auto-correction threshold
+                    // and would force the correction. As an ordinary correction the merge only
+                    // commits it when the language model came to the same conclusion, i.e. when
+                    // the context actually supports it.
+                    ? Dictionary::KIND_CORRECTION | outputTypeFlags
+                    // The typed form is not a word ("alot", "i", "aint"): plain typo, there is
+                    // no legitimate word to compete with, so keep the unconditional override.
+                    : Dictionary::KIND_WHITELIST;
         } else {
             // shortcut entry's score == its base entry's score - 1
             shortcutScore = finalScore;

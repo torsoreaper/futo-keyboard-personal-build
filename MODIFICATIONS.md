@@ -43,14 +43,16 @@ part of the official FUTO Keyboard.
    correction beam, a typo prior, and a two-word context.
 
 7. **Allowlist corrections no longer override the language model.** The built-in
-   allowlist forces a correction when a curated form is typed (`tine` → `time`,
+   allowlist offers a correction when a curated form is typed (`tine` → `time`,
    `hoe` → `how`, `ill` → `I'll`). It used to be emitted with the maximum possible
-   score and a kind that skipped the auto-correction threshold, so it beat the
-   language model's reading of the sentence by arithmetic alone. When the typed
-   form is itself a real word it is now emitted as an ordinary dictionary
-   correction: it competes on score and goes through the same thresholds. Allowlist
-   entries whose typed form is *not* a real word (`alot` → `a lot`, `i` → `I`) still
-   correct unconditionally, because there is no legitimate word to compete with.
+   score *and* a kind that skipped the auto-correction threshold, so it beat the
+   language model's reading of the sentence by arithmetic alone. It is still the
+   dictionary's top candidate, but that kind is gone, so the correction only
+   commits when the language model's context agrees with it — a low-usage word like
+   `tine` is no longer replaced by `time` unless the sentence actually suggests
+   `time`. Allowlist entries whose typed form is *not* a word (`alot` → `a lot`,
+   `i` → `I`) still correct unconditionally, because there is no legitimate word to
+   compete with.
 
 ## Changes to personalisation
 
@@ -64,13 +66,18 @@ part of the official FUTO Keyboard.
    the built-in dictionaries.
 
 10. **Learned words are ordinary dictionary candidates.** A word learned from
-   typing history used to be cloned above the language model whenever the model had
-   no real word of its own. That promotion is removed; history words now compete on
-   their own score like any other dictionary entry.
+    typing history used to be cloned above the language model whenever the model had
+    no real word of its own. That promotion is removed; history words now compete on
+    their own score like any other dictionary entry.
+
+11. **Personal-dictionary shortcuts are hard rules.** A shortcut defined in the
+    personal dictionary (trigger → word, e.g. `ryankl` → `ryanklockwood@gmail.com`)
+    now forces the word when the trigger is typed, instead of being a low-priority
+    suggestion the language model could ignore.
 
 ## Added tooling
 
-11. **Rotating on-device debug log.** A 250 MB log (5 MB chunks, oldest
+12. **Rotating on-device debug log.** A 250 MB log (5 MB chunks, oldest
     overwritten) in the app's private storage, which survives the keyboard being
     killed. It records what was typed, the top suggestion and its source, and
     whether it will auto-correct. Controlled from Settings → Miscellaneous.

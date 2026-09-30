@@ -48,9 +48,11 @@ public class UserBinaryDictionary extends ExpandableBinaryDictionary {
     private static final String USER_DICTIONARY_ALL_LANGUAGES = "";
     private static final int HISTORICAL_DEFAULT_USER_DICTIONARY_FREQUENCY = 250;
     private static final int LATINIME_DEFAULT_USER_DICTIONARY_FREQUENCY = 160;
-    // Shortcut frequency is 0~15, with 15 = whitelist. We don't want user dictionary entries
-    // to auto-correct, so we set this to the highest frequency that won't, i.e. 14.
-    private static final int USER_DICT_SHORTCUT_FREQUENCY = 14;
+    // Shortcut frequency is 0~15, with 15 = whitelist. Set to 15 so a shortcut the user defines
+    // in the personal dictionary is a hard rule: when the shortcut is typed exactly it is offered
+    // as the top suggestion and commits, regardless of what the language model would prefer. This
+    // is what makes e.g. "ryankl" -> "ryanklockwood@gmail.com" reliable for filling out forms.
+    private static final int USER_DICT_SHORTCUT_FREQUENCY = 15;
 
     private static final String[] PROJECTION_QUERY_WITH_SHORTCUT = new String[] {
             Words.WORD,
