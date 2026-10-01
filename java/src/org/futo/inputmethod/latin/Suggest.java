@@ -207,11 +207,16 @@ public final class Suggest {
                 ? null : whitelistedWordInfo.mWord;
         final boolean resultsArePredictions = !wordComposer.isComposingWord();
 
-        // We allow auto-correction if whitelisting is not required or the word is whitelisted,
-        // or if the word had more than one char and was not suggested.
+        // We allow auto-correction if whitelisting is not required or the word is whitelisted, or
+        // if the word is not itself a known word. A known word is only replaced when it is
+        // whitelisted (a plain typo such as "alot"), or when the merge promoted the correction
+        // because the language model's context agreed with it (that promotion is whitelisted
+        // too). Relying on isTypedWordKnown rather than "the word was not suggested" matters
+        // because a language-model suggestion for the typed word carries no source dictionary,
+        // which used to make a known word look unknown.
         final boolean allowsToBeAutoCorrected =
                 (SHOULD_AUTO_CORRECT_USING_NON_WHITE_LISTED_SUGGESTION || whitelistedWord != null)
-                || (consideredWord.length() > 1 && (sourceDictionaryOfRemovedWord == null));
+                || (consideredWord.length() > 1 && !isTypedWordKnown);
 
         // A token with digits can still be auto-corrected when the digits were a mistap of the
         // top-row letters (e.g. "hell9" -> "hello"); the caller promotes such a suggestion and

@@ -70,14 +70,9 @@ part of the official FUTO Keyboard.
     no real word of its own. That promotion is removed; history words now compete on
     their own score like any other dictionary entry.
 
-11. **Personal-dictionary shortcuts are hard rules.** A shortcut defined in the
-    personal dictionary (trigger → word, e.g. `ryankl` → `ryanklockwood@gmail.com`)
-    now forces the word when the trigger is typed, instead of being a low-priority
-    suggestion the language model could ignore.
-
 ## Added tooling
 
-12. **Rotating on-device debug log.** A 250 MB log (5 MB chunks, oldest
+11. **Rotating on-device debug log.** A 250 MB log (5 MB chunks, oldest
     overwritten) in the app's private storage, which survives the keyboard being
     killed. It records what was typed, the top suggestion and its source, and
     whether it will auto-correct. Controlled from Settings → Miscellaneous.
