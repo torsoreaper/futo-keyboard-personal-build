@@ -18,6 +18,7 @@ import org.futo.inputmethod.keyboard.Keyboard
 import org.futo.inputmethod.keyboard.KeyboardSwitcher
 import org.futo.inputmethod.latin.BinaryDictionary
 import org.futo.inputmethod.latin.BuildConfig
+import org.futo.inputmethod.latin.Dictionary
 import org.futo.inputmethod.latin.DictionaryFacilitator
 import org.futo.inputmethod.latin.NgramContext
 import org.futo.inputmethod.latin.Suggest
@@ -50,6 +51,11 @@ private const val MIN_TRANSFORMER_AUTOCORRECT_SCORE = 500_000
 // "Northern" while still allowing "someok" -> "someone", "didnyn" -> "didn't", "andr9uj" ->
 // "Android". Words the user added to the personal dictionary count as real words.
 private const val MAX_TRANSFORMER_CORRECTION_EDIT_DISTANCE = 3
+
+// How close a word from the user's own dictionaries (personal dictionary or typing history) must
+// be to what was typed before it is preferred over the model's guess. Only used when what was
+// typed is not itself a word, so it cannot hijack a real word like it used to.
+private const val MAX_USER_WORD_TYPO_DISTANCE = 3
 
 val AutocorrectThresholdSetting = SettingsKey(
     floatPreferencesKey("lm_autocorrect_threshold"),
@@ -330,6 +336,39 @@ public class LanguageModelFacilitator(
         return distance <= MAX_TRANSFORMER_CORRECTION_EDIT_DISTANCE
     }
 
+    /**
+     * The closest word from the user's own dictionaries (personal dictionary or typing history)
+     * to [typed], when what was typed is not itself a word and the user's word is a closer match
+     * than the model's top guess. This is what turns "deepseel" into the "deepseek" the user has
+     * typed before, rather than the model's invention. Returns null when there is no such word.
+     */
+    private fun findCloseUserWord(
+        typed: String,
+        dictionaryCandidates: List<SuggestedWordInfo>,
+        modelTop: SuggestedWordInfo?
+    ): SuggestedWordInfo? {
+        if (typed.length < 3) return null
+        if (dictionaryFacilitator.isValidSpellingWord(typed)) return null
+        val lowerTyped = typed.lowercase()
+        val modelDistance = modelTop?.let { levenshteinDistance(lowerTyped, it.mWord.lowercase()) }
+        return dictionaryCandidates
+            .asSequence()
+            .filter {
+                val type = it.mSourceDict?.mDictType
+                type == Dictionary.TYPE_USER || type == Dictionary.TYPE_USER_HISTORY
+            }
+            .map { it to levenshteinDistance(lowerTyped, it.mWord.lowercase()) }
+            .filter { (_, distance) ->
+                distance in 1..MAX_USER_WORD_TYPO_DISTANCE &&
+                        (modelDistance == null || distance < modelDistance)
+            }
+            .minWithOrNull(
+                compareBy<Pair<SuggestedWordInfo, Int>> { it.second }
+                    .thenByDescending { it.first.mScore }
+            )
+            ?.first
+    }
+
     fun processAndMergeSuggestions(
         values: PredictionInputValues,
         suggestedWordsDict: SuggestedWords,
@@ -427,6 +466,11 @@ public class LanguageModelFacilitator(
 
         val bothAlgorithmsCameToSameConclusion = maxWordDict?.mWord == maxWord?.mWord
 
+        // Prefer a word the user has used before over the model's guess when what was typed is not
+        // itself a word. This is what turns "deepseel" into "deepseek" and "mouthguar" into
+        // "mouthguard" instead of the model's inventions ("deepsells", "Northern").
+        val userWordCandidate = findCloseUserWord(typedWordForSplit, suggestedWordsDictList, maxWord)
+
         // A negative dictionary score means the dictionary had no real opinion: it is only
         // suggesting that word because it ran out of plausible candidates. That is not the same
         // as disagreeing with the language model, so when the transformer is confident about a
@@ -438,7 +482,13 @@ public class LanguageModelFacilitator(
 
         var autocorrectWord: SuggestedWordInfo? = null
         val filtered = mutableListOf<SuggestedWordInfo>()
-        if(dictionaryHasNoOpinion && transformerIsConfident) {
+        if (userWordCandidate != null && maxWord != null) {
+            if(BuildConfig.DEBUG) Log.d(TAG, "preferring user word '${userWordCandidate.mWord}' over model '${maxWord.mWord}'")
+            val clone = userWordCandidate.scoreAtLeast(maxWord)
+            autocorrectWord = clone
+            suggestionResults.add(clone)
+            filtered.add(userWordCandidate)
+        } else if(dictionaryHasNoOpinion && transformerIsConfident) {
             val candidate = maxWord!!
             if (transformerCorrectionIsPlausible(typedWordForTypoPrior, candidate.mWord)) {
                 if(BuildConfig.DEBUG) Log.d(TAG, "dictionary has no opinion, trusting transformer: autocorrect to ${candidate.mWord}")
