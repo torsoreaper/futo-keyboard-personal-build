@@ -31,10 +31,14 @@ part of the official FUTO Keyboard.
    `0`→`p`) is corrected when the result is a real word (`hell9` → `hello`,
    `c0de` → `code`). Pure numbers are never touched.
 
-4. **Confident transformer corrections commit.** When the dictionary has no
-   real opinion (its best candidate scores below zero) the language model's
-   suggestion is used instead of being discarded, so typos the dictionary
-   cannot help with (`gjthun` → `GitHub`) commit on space.
+4. **Transformer corrections only commit when they are believable.** When the
+   dictionary has no real opinion (its best candidate scores below zero) the
+   language model's suggestion used to be given the highest score and committed.
+   It now only commits when the model's word is a real word the keyboard knows
+   (main, contacts or personal dictionary) and is close to what was typed, so
+   `deepseel` no longer becomes `deepsells` and `Mouthguar` no longer becomes
+   `Northern`. Otherwise the model's words are still suggested, but you have to
+   tap them.
 
 5. **Typos correct without full confidence**, gated by a configurable length
    tolerance so a word is not replaced by one of a very different length.
@@ -60,9 +64,13 @@ part of the official FUTO Keyboard.
    model as a `(Glossary: ...)` list, which pushed those words forward and let them
    overrule the sentence. It is now just another dictionary.
 
-10. **Learned words are treated like normal dictionary words.** A word learned from
-    typing history used to be pushed above the language model when the model had no
-    real word of its own. That is removed; history words now rank on their own score.
+10. **Your own words win when what you typed is not a word.** A word learned from
+    typing history used to be pushed above the language model whenever the model had
+    no real word of its own. That is gone. Instead, when what you typed is not itself
+    a word, the closest word from the personal dictionary or your typing history is
+    used if it is a closer match than the model's guess, so `deepseel` becomes the
+    `deepseek` you have typed before instead of an invented word. It cannot hijack a
+    real word, because it only applies when what you typed is not one.
 
 ## Added tooling
 
