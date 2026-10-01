@@ -44,6 +44,13 @@ private const val SPACE_SPLIT_WEAK_KEYS = "zxm"
 // corrections such as "gjthun" -> "GitHub" score around 1.4M.
 private const val MIN_TRANSFORMER_AUTOCORRECT_SCORE = 500_000
 
+// When the dictionary has no positive opinion we fall back to the transformer, but it must not be
+// allowed to commit an invention. The model's word has to be a real word and close to what was
+// typed; this blocks "deepseel" -> "deepsells", "glasswit" -> "glass-wire", "Mouthguar" ->
+// "Northern" while still allowing "someok" -> "someone", "didnyn" -> "didn't", "andr9uj" ->
+// "Android". Words the user added to the personal dictionary count as real words.
+private const val MAX_TRANSFORMER_CORRECTION_EDIT_DISTANCE = 3
+
 val AutocorrectThresholdSetting = SettingsKey(
     floatPreferencesKey("lm_autocorrect_threshold"),
     4.0f
@@ -126,6 +133,29 @@ internal fun SuggestedWordInfo.scoreAtMost(other: SuggestedWordInfo): SuggestedW
         0
     )
 
+    return result
+}
+
+/**
+ * The same word and score, but no longer marked as appropriate for auto-correction and no longer
+ * carrying the whitelist kind. Such a suggestion is still shown and can still be tapped, but it
+ * cannot bypass the auto-correction threshold, so it will not be committed by pressing space.
+ */
+internal fun SuggestedWordInfo.asPlainSuggestion(): SuggestedWordInfo {
+    val withoutAppropriateFlag = mKindAndFlags and
+        SuggestedWordInfo.KIND_FLAG_APPROPRIATE_FOR_AUTO_CORRECTION.inv()
+    // Clear the kind byte (KIND_MASK_KIND, 0xFF) and set an ordinary correction kind.
+    val kind = (withoutAppropriateFlag and 0xFFFFFF00.toInt()) or SuggestedWordInfo.KIND_CORRECTION
+    val result = SuggestedWordInfo(
+        mWord,
+        mPrevWordsContext,
+        mScore,
+        kind,
+        mSourceDict,
+        mIndexOfTouchPointOfSecondWord,
+        mAutoCommitFirstWordConfidence
+    )
+    result.mOriginatesFromTransformerLM = mOriginatesFromTransformerLM
     return result
 }
 
@@ -287,6 +317,19 @@ public class LanguageModelFacilitator(
         return lmSuggestions
     }
 
+    /**
+     * Whether the transformer's word is close enough to what was typed to be committed when the
+     * dictionary has no positive opinion. It must be an actual word the keyboard knows (main,
+     * contacts or personal dictionary - history does not count) and within a small edit distance
+     * of the typed string, so the model cannot force an invented word into the text.
+     */
+    private fun transformerCorrectionIsPlausible(typed: String, candidate: String): Boolean {
+        if (typed.isEmpty() || candidate.isEmpty()) return false
+        if (!dictionaryFacilitator.isValidSpellingWord(candidate)) return false
+        val distance = levenshteinDistance(typed.lowercase(), candidate.lowercase())
+        return distance <= MAX_TRANSFORMER_CORRECTION_EDIT_DISTANCE
+    }
+
     fun processAndMergeSuggestions(
         values: PredictionInputValues,
         suggestedWordsDict: SuggestedWords,
@@ -300,7 +343,7 @@ public class LanguageModelFacilitator(
 
 
         val typedWordForTypoPrior = values.composedData.mTypedWord
-        val reweightedSuggestions = lmSuggestions.mapIndexedNotNull { i, it ->
+        var reweightedSuggestions = lmSuggestions.mapIndexedNotNull { i, it ->
             if(transformerWeight == Float.NEGATIVE_INFINITY) { null } else {
                 // Phase 2 typo prior: boost candidates close in edit distance to what was typed,
                 // so a near-miss typo outranks a distant high-probability word. Conservative:
@@ -396,11 +439,24 @@ public class LanguageModelFacilitator(
         var autocorrectWord: SuggestedWordInfo? = null
         val filtered = mutableListOf<SuggestedWordInfo>()
         if(dictionaryHasNoOpinion && transformerIsConfident) {
-            if(BuildConfig.DEBUG) Log.d(TAG, "dictionary has no opinion, trusting transformer: autocorrect to ${maxWord!!.mWord}")
-            // Score the transformer's word above everything so it sits in the auto-correction slot.
-            val clone = maxWord!!.copyAs(SuggestedWordInfo.MAX_SCORE)
-            autocorrectWord = clone
-            suggestionResults.add(clone)
+            val candidate = maxWord!!
+            if (transformerCorrectionIsPlausible(typedWordForTypoPrior, candidate.mWord)) {
+                if(BuildConfig.DEBUG) Log.d(TAG, "dictionary has no opinion, trusting transformer: autocorrect to ${candidate.mWord}")
+                // Score the transformer's word above everything so it sits in the auto-correction slot.
+                val clone = candidate.copyAs(SuggestedWordInfo.MAX_SCORE)
+                autocorrectWord = clone
+                suggestionResults.add(clone)
+            } else {
+                // The dictionary has nothing useful to say and the model's guess is not a believable
+                // typo of what was typed (e.g. "deepseel" -> "deepsells", "Mouthguar" ->
+                // "Northern"). Keep the model's words in the strip, but strip the flag that lets
+                // them bypass the auto-correction threshold, so they can be tapped rather than
+                // committed by pressing space.
+                if(BuildConfig.DEBUG) Log.d(TAG, "dictionary has no opinion and transformer guess " +
+                        "'${candidate.mWord}' is not a plausible correction of " +
+                        "'$typedWordForTypoPrior': suggesting only")
+                reweightedSuggestions = reweightedSuggestions.map { it.asPlainSuggestion() }
+            }
         } else if(bothAlgorithmsCameToSameConclusion && maxWord != null && maxWordDict != null){
             if(BuildConfig.DEBUG) Log.d(TAG, "both algorithms came to same conclusion, autocorrect to ${maxWord.mWord}")
             // We can be pretty confident about autocorrecting this
