@@ -43,32 +43,26 @@ part of the official FUTO Keyboard.
    correction beam, a typo prior, and a two-word context.
 
 7. **Allowlist corrections no longer override the language model.** The built-in
-   allowlist offers a correction when a curated form is typed (`tine` → `time`,
-   `hoe` → `how`, `ill` → `I'll`). It used to be emitted with the maximum possible
-   score *and* a kind that skipped the auto-correction threshold, so it beat the
-   language model's reading of the sentence by arithmetic alone. It is still the
-   dictionary's top candidate, but that kind is gone, so the correction only
-   commits when the language model's context agrees with it — a low-usage word like
-   `tine` is no longer replaced by `time` unless the sentence actually suggests
-   `time`. Allowlist entries whose typed form is *not* a word (`alot` → `a lot`,
-   `i` → `I`) still correct unconditionally, because there is no legitimate word to
-   compete with.
+   allowlist makes corrections like `tine` → `time`, `hoe` → `how` and `ill` → `I'll`.
+   They used to be sent with the highest possible score and a flag that skipped the
+   normal confidence check, so they always won. They are still offered first, but
+   now only replace what you typed when the language model agrees, so `tine` is not
+   changed to `time` unless the sentence is really about time. Allowlist entries for
+   things that are not words at all (`alot` → `a lot`, `i` → `I`) still correct.
 
 ## Changes to personalisation
 
 8. **Built-in word list.** Common profanity and over-the-counter medicine names
    are seeded into the user dictionary once so they are recognised as words.
 
-9. **Custom (personal-dictionary) words are ordinary dictionary words.** The
-   personal dictionary used to be prepended to every transformer request as a
-   `(Glossary: ...)` prefix, which biased the model toward those words and let them
-   override the sentence context. It is now only a dictionary source, exactly like
-   the built-in dictionaries.
+9. **Custom (personal-dictionary) words are treated like normal dictionary words.**
+   The personal dictionary used to be pasted into every request sent to the language
+   model as a `(Glossary: ...)` list, which pushed those words forward and let them
+   overrule the sentence. It is now just another dictionary.
 
-10. **Learned words are ordinary dictionary candidates.** A word learned from
-    typing history used to be cloned above the language model whenever the model had
-    no real word of its own. That promotion is removed; history words now compete on
-    their own score like any other dictionary entry.
+10. **Learned words are treated like normal dictionary words.** A word learned from
+    typing history used to be pushed above the language model when the model had no
+    real word of its own. That is removed; history words now rank on their own score.
 
 ## Added tooling
 
