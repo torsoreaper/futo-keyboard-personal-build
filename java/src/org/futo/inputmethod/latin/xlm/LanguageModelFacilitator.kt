@@ -417,6 +417,26 @@ public class LanguageModelFacilitator(
             suggestionBlacklist.isSuggestedWordOk(it)
         }.toMutableList()
 
+        // The dictionary-only path (Suggest.getSuggestedWordsForNonBatchInput) injects the
+        // digit->letter reading at MAX_SCORE before the merge, with no knowledge of the sentence.
+        // The transformer does read the sentence, so when it is confident about a plausible
+        // different word, drop the injected reading here and let the model's context decide. This
+        // is what lets context choose "2nd" -> "end" in "the end of the book" or "3rd" -> "red" in
+        // "that shirt is red", instead of the digits always winning.
+        val typedWordForDigitFix = values.composedData.mTypedWord
+        val digitToLetterCandidate = Suggest.findDigitLetterCorrection(
+                dictionaryFacilitator, typedWordForDigitFix)
+        val transformerHasBetterReading = digitToLetterCandidate != null
+                && maxWord != null
+                && maxWord.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE
+                && !maxWord.mWord.equals(digitToLetterCandidate, ignoreCase = true)
+                && transformerCorrectionIsPlausible(typedWordForDigitFix, maxWord.mWord)
+        if (transformerHasBetterReading) {
+            suggestedWordsDictList.removeAll {
+                it.mWord.equals(digitToLetterCandidate, ignoreCase = true)
+            }
+        }
+
         // The native dictionary can already split a run-together token at a key that was probably
         // meant to be the space bar (e.g. "laxybdogz" -> "lazy dogs"). Its score is usually low, so
         // the LM merge below would otherwise discard it. When the typed word is not itself a word
@@ -565,17 +585,8 @@ public class LanguageModelFacilitator(
         }
 
         // A token that contains a digit may be a mistap of the number row directly above the top
-        // letter row (e.g. "hell9" -> "hello"). The transformer already reads the sentence, so it
-        // is the context authority: only force the digit->letter reading when the model is not
-        // confidently proposing a different real word that is a plausible correction. This is what
-        // lets context choose between an ordinal and the mistapped word ("2nd" -> "end" in "the end
-        // of the book", "3rd" -> "red" in "that shirt is red") instead of always taking the digits.
-        val digitToLetterCandidate = Suggest.findDigitLetterCorrection(dictionaryFacilitator, typedWordForSplit)
-        val transformerHasBetterReading = digitToLetterCandidate != null
-                && maxWord != null
-                && maxWord.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE
-                && !maxWord.mWord.equals(digitToLetterCandidate, ignoreCase = true)
-                && transformerCorrectionIsPlausible(typedWordForSplit, maxWord.mWord)
+        // letter row (e.g. "hell9" -> "hello"). Promote the digit->letter reading unless the
+        // transformer's sentence-context reading took precedence above.
         if(digitToLetterCandidate != null && !transformerHasBetterReading) {
             if(BuildConfig.DEBUG) Log.d(TAG, "promoting digit->letter correction: $digitToLetterCandidate")
             suggestionResults.add(SuggestedWordInfo(
