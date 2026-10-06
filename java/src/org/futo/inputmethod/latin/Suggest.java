@@ -247,8 +247,10 @@ public final class Suggest {
                 // If the word is entirely digits, never autocorrect regardless of number row
                 // being active or not
                 || wordComposer.isEntirelyDigits()
-                // If it's an ordinal (1st, 2nd, 3rd), do not autocorrect
-                //|| wordComposer.isOrdinal(locale)
+                // If it's an ordinal (1st, 2nd, 3rd), do not autocorrect: the number and its
+                // suffix were typed deliberately on the number row, and the digit->letter
+                // correction already declines to treat an ordinal as a mistap.
+                || wordComposer.isOrdinal(locale)
                 // If it starts with a digit, do not autocorrect, unless it's a digit->letter fix
                 || (wordComposer.startsWithDigit() && !digitToLetterCorrection)
                 // If it's attached to a non word, do not autocorrect
@@ -645,6 +647,11 @@ public final class Suggest {
         if (dictionaryFacilitator == null || rawTypedWord == null) {
             return null;
         }
+        // Ordinals ("2nd", "3rd", "4th", "21st") are deliberate number-row input, not a mistap of
+        // the letters below the digits, so they are never a digit->letter correction.
+        if (rawTypedWord.matches("^(\\d+)(st|nd|rd|th)$")) {
+            return null;
+        }
         final int length = rawTypedWord.length();
         if (length < 2 || length > 24) {
             return null;
@@ -702,12 +709,18 @@ public final class Suggest {
         if (info.mWord.indexOf(Constants.CODE_SPACE) >= 0) {
             if (info.mWord.length() == typedWord.length()) {
                 // Line the suggestion up against what was typed: it is the typed word with some
-                // keys turned into spaces, so every space must sit on an allowed key. Comparing
-                // positions rather than relying on mIndexOfTouchPointOfSecondWord is what makes
-                // several spaces work, and it does not depend on a field that merge-cloned
-                // suggestions reset to zero.
+                // keys turned into spaces, so every space must sit on an allowed key AND every
+                // non-space character must be the character that was typed. Checking the letters
+                // too is what stops an unrelated two-word phrase that merely happens to have a
+                // space over a bottom-row key (e.g. "foni" -> "do i", "checkinf" -> "the king")
+                // from being committed.
                 for (int i = 0; i < typedWord.length(); i++) {
-                    if (info.mWord.charAt(i) != Constants.CODE_SPACE) {
+                    final char suggestionChar = info.mWord.charAt(i);
+                    if (suggestionChar != Constants.CODE_SPACE) {
+                        if (Character.toLowerCase(suggestionChar)
+                                != Character.toLowerCase(typedWord.charAt(i))) {
+                            return false;
+                        }
                         continue;
                     }
                     final char splitKey = Character.toLowerCase(typedWord.charAt(i));

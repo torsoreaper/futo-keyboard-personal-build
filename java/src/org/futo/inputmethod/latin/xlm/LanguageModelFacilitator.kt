@@ -357,6 +357,10 @@ public class LanguageModelFacilitator(
                 val type = it.mSourceDict?.mDictType
                 type == Dictionary.TYPE_USER || type == Dictionary.TYPE_USER_HISTORY
             }
+            // A user word is preferred as a single token. Multi-word history phrases
+            // ("have i", "do i") are not a replacement for what was typed, and preferring one
+            // produces the same context-blind split the space-split logic is careful about.
+            .filter { !it.mWord.contains(' ') }
             .map { it to levenshteinDistance(lowerTyped, it.mWord.lowercase()) }
             .filter { (_, distance) ->
                 distance in 1..MAX_USER_WORD_TYPO_DISTANCE &&
