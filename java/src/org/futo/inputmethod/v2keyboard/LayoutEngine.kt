@@ -206,7 +206,8 @@ data class LayoutEngine(
             }
         }
 
-        val rowWidths = keyboard.overrideWidths.mapValues {
+        val rowWidths = (mapOf(KeyWidth.Custom1 to keyboard.minimumBottomRowFunctionalKeyWidth)
+                + keyboard.overrideWidths).mapValues {
             it.value * layoutWidth
         }.toMutableMap()
 
