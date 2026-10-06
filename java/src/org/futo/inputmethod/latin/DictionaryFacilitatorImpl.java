@@ -956,6 +956,24 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
             return false;
         }
 
+        if (isInAnyDictionary(word, dictionariesToCheck)) {
+            return true;
+        }
+
+        // The binary dictionaries match codepoints exactly, so a capitalized form of a known word
+        // ("Shed" at the start of a sentence) is not found by the exact lookup above even though
+        // "shed" is. Callers use this to decide whether the typed token is a word the keyboard
+        // knows, and must not treat a capitalized known word as unknown, so fall back to the
+        // lowercased form. This mirrors putWordIntoValidSpellingWordCache, which derives the
+        // validity of the capitalized form from the lowercase form.
+        final String lowercased = word.toLowerCase(getPrimaryLocale());
+        if (!lowercased.equals(word)) {
+            return isInAnyDictionary(lowercased, dictionariesToCheck);
+        }
+        return false;
+    }
+
+    private boolean isInAnyDictionary(final String word, final String[] dictionariesToCheck) {
         for(DictionaryGroup dictionaryGroup : mDictionaryGroups) {
             if (dictionaryGroup.mLocale == null) {
                 continue;

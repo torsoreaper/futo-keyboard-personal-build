@@ -534,21 +534,30 @@ public class LanguageModelFacilitator(
             }
         }
 
-        if(spaceSplitCandidate != null) {
+        // Only promote the dictionary's two-word split when it is genuinely the better reading.
+        // The split is context-blind otherwise: for "checkinf" the dictionary and the model both
+        // want "checking" (lmTop=checking, dictTop=checking), but a same-length split whose space
+        // happened to land on a strong key ("the king") still won, overriding both. Require that
+        // the algorithms have not already agreed on a single word, and that the dictionary did not
+        // rank some other single-word candidate above this split.
+        val spaceSplit = spaceSplitCandidate
+        if (spaceSplit != null
+                && !bothAlgorithmsCameToSameConclusion
+                && (maxWordDict == null || spaceSplit.mScore >= maxWordDict.mScore)) {
             // Promote the dictionary's two-word split so it becomes the top suggestion and can be
             // committed by pressing space. MAX_SCORE keeps it ahead of the LM single words, and
             // the auto-correction flag lets it pass the threshold check.
-            if(BuildConfig.DEBUG) Log.d(TAG, "promoting space-split suggestion: ${spaceSplitCandidate.word}")
+            if(BuildConfig.DEBUG) Log.d(TAG, "promoting space-split suggestion: ${spaceSplit.word}")
             suggestionResults.add(SuggestedWordInfo(
-                spaceSplitCandidate.word,
-                spaceSplitCandidate.mPrevWordsContext,
+                spaceSplit.word,
+                spaceSplit.mPrevWordsContext,
                 SuggestedWordInfo.MAX_SCORE,
                 SuggestedWordInfo.KIND_FLAG_APPROPRIATE_FOR_AUTO_CORRECTION or SuggestedWordInfo.KIND_CORRECTION,
-                spaceSplitCandidate.mSourceDict,
-                spaceSplitCandidate.mIndexOfTouchPointOfSecondWord,
-                spaceSplitCandidate.mAutoCommitFirstWordConfidence
+                spaceSplit.mSourceDict,
+                spaceSplit.mIndexOfTouchPointOfSecondWord,
+                spaceSplit.mAutoCommitFirstWordConfidence
             ))
-            if(!filtered.contains(spaceSplitCandidate)) filtered.add(spaceSplitCandidate)
+            if(!filtered.contains(spaceSplit)) filtered.add(spaceSplit)
         }
 
         // A token that contains a digit may be a mistap of the number row directly above the top
