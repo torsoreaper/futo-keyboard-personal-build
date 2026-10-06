@@ -495,13 +495,17 @@ public class LanguageModelFacilitator(
         // "mouthguard" instead of the model's inventions ("deepsells", "Northern").
         val userWordCandidate = findCloseUserWord(typedWordForSplit, suggestedWordsDictList, maxWord)
 
-        // A negative dictionary score means the dictionary had no real opinion: it is only
-        // suggesting that word because it ran out of plausible candidates. That is not the same
-        // as disagreeing with the language model, so when the transformer is confident about a
-        // word we should keep it rather than discarding it for lack of a second opinion. Without
-        // this, typos the dictionary cannot help with (e.g. "gjthun" -> "GitHub") get suggested
-        // but never commit on space.
+        // A real-word allowlist correction ("id" -> "I'd", "tine" -> "time") is kept at MAX_SCORE
+        // by the native side so it can be the dictionary's top candidate and be committed when the
+        // model agrees with it. But it must not count as a strong dictionary opinion when the model
+        // confidently wants a different word: otherwise it blocks the model's context reading.
+        // Typing "id" in "This __ the best" never became "is" because "I'd" was pinned on top.
+        val dictTopIsPinnedAllowlistCorrection = maxWordDict != null
+                && maxWordDict.mScore == SuggestedWordInfo.MAX_SCORE
+                && !maxWordDict.isKindOf(SuggestedWordInfo.KIND_WHITELIST)
         val dictionaryHasNoOpinion = maxWordDict == null || maxWordDict.mScore < 0
+                || (dictTopIsPinnedAllowlistCorrection
+                        && maxWord != null && maxWordDict.mWord != maxWord.mWord)
         val transformerIsConfident = maxWord != null && maxWord.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE
 
         var autocorrectWord: SuggestedWordInfo? = null
