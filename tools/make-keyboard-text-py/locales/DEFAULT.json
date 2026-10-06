@@ -560,25 +560,22 @@
         "o": "!text/keyspec_left_curly_bracket",
         "p": "!text/keyspec_right_curly_bracket",
 
-        "a": "@",
-        "s": "#",
-        "d": [
-            "!text/keyspec_currency",
-            "$"
-        ],
-        "f": "\\%",
-        "g": ["&", "|"],
+        "a": [],
+        "s": [],
+        "d": [],
+        "f": [],
+        "g": ["|"],
         "h": ["-", "–", "—", "_"],
         "j": ["+", "="],
-        "k": ["!text/keyspec_left_parenthesis", "!text/keyspec_left_square_bracket", "!text/keyspec_left_curly_bracket", "!text/keyspec_less_than"],
-        "l": ["!text/keyspec_right_parenthesis", "!text/keyspec_right_square_bracket", "!text/keyspec_right_curly_bracket", "!text/keyspec_greater_than"],
+        "k": ["!text/keyspec_left_square_bracket", "!text/keyspec_left_curly_bracket", "!text/keyspec_less_than"],
+        "l": ["!text/keyspec_right_square_bracket", "!text/keyspec_right_curly_bracket", "!text/keyspec_greater_than"],
 
         "z": [],
         "x": "\"",
         "c": "'",
         "v": ":",
         "b": "!text/keyspec_symbols_semicolon",
-        "n": "!",
+        "n": [],
         "m": ["!text/keyspec_symbols_question", "/"],
 
         "r2_e1": "/"
