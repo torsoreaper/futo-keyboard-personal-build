@@ -137,10 +137,7 @@ val DefaultBottomRow = Row(
         TemplateActionKey,
         TemplateSpaceKey,
         TemplateOptionalZWNJKey,
-        TemplatePeriodKey,
-        // The enter/search key is the only key that uses the Custom1 width, so a layout can make
-        // it narrower (and the growing space bar wider) by setting overrideWidths.Custom1.
-        EnterKey(attributes = KeyAttributes(width = KeyWidth.Custom1))
+        TemplatePeriodKey
     )
 )
 

@@ -208,6 +208,7 @@
         ],
         "arabic_diacritics": [],
         "symbols_1": [
+            "!",
             "¹",
             "₁",
             "½",
@@ -216,43 +217,52 @@
             "⅛"
         ],
         "symbols_2": [
+            "@",
             "²",
             "₂",
             "⅔"
         ],
         "symbols_3": [
+            "#",
             "³",
             "₃",
             "¾",
             "⅜"
         ],
         "symbols_4": [
+            "$",
             "⁴",
             "₄"
         ],
         "symbols_5": [
+            "%",
             "⁵",
             "₅",
             "⅝"
         ],
         "symbols_6": [
+            "^",
             "⁶",
             "₆"
         ],
         "symbols_7": [
+            "&",
             "⁷",
             "₇",
             "⅞"
         ],
         "symbols_8": [
+            "*",
             "⁸",
             "₈"
         ],
         "symbols_9": [
+            "(",
             "⁹",
             "₉"
         ],
         "symbols_0": [
+            ")",
             "⁰",
             "₀",
             "ⁿ",
@@ -563,7 +573,7 @@
         "k": ["!text/keyspec_left_parenthesis", "!text/keyspec_left_square_bracket", "!text/keyspec_left_curly_bracket", "!text/keyspec_less_than"],
         "l": ["!text/keyspec_right_parenthesis", "!text/keyspec_right_square_bracket", "!text/keyspec_right_curly_bracket", "!text/keyspec_greater_than"],
 
-        "z": "*",
+        "z": [],
         "x": "\"",
         "c": "'",
         "v": ":",
