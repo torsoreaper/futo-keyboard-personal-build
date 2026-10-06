@@ -380,13 +380,18 @@ data class TemplateCurrencyKey(val currency: String) : AbstractKey {
 }
 
 data class PeriodKey(
-    val default: AbstractKey = BaseKey("."),
+    /**
+     * Optional width token. `null` keeps the inherited width (regular); passing a custom token
+     * lets the period key be rendered narrow so the growing space bar absorbs the freed width.
+     */
+    val width: KeyWidth? = null,
+    val default: AbstractKey = BaseKey(".", attributes = KeyAttributes(width = width)),
     val alternative: AbstractKey = BaseKey(".",
         moreKeys = listOf(
             "!text/keyspec_symbols_question",
             "!text/keyspec_comma",
             "!"),
-        attributes = KeyAttributes(moreKeyMode = MoreKeyMode.OnlyExplicit, fastMoreKeys = true)
+        attributes = KeyAttributes(moreKeyMode = MoreKeyMode.OnlyExplicit, fastMoreKeys = true, width = width)
     )
 ) : AbstractKey {
     override fun countsToKeyCoordinate(
@@ -407,6 +412,10 @@ data class PeriodKey(
 }
 
 val TemplatePeriodKey = PeriodKey()
+
+// Narrow period used by DefaultBottomRow so the space bar can grow (width declared in
+// LayoutEngine's custom-width defaults; see KeyWidth.Custom2).
+val TemplateNarrowPeriodKey = PeriodKey(width = KeyWidth.Custom2)
 
 val TemplateKeys = mapOf(
     "shift" to TemplateShiftKey,

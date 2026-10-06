@@ -206,7 +206,14 @@ data class LayoutEngine(
             }
         }
 
-        val rowWidths = keyboard.overrideWidths.mapValues {
+        // Narrow, icon-only bottom-row keys: the enter/search key (Custom1) and the period key
+        // (Custom2). Defaults are declared here so the keys always have a width; a layout can
+        // still override either via Keyboard.overrideWidths. The growing space bar absorbs the
+        // freed width. 0.07 == 7% of the keyboard width.
+        val rowWidths = (mapOf(
+            KeyWidth.Custom1 to 0.07f,
+            KeyWidth.Custom2 to 0.07f
+        ) + keyboard.overrideWidths).mapValues {
             it.value * layoutWidth
         }.toMutableMap()
 

@@ -137,7 +137,11 @@ val DefaultBottomRow = Row(
         TemplateActionKey,
         TemplateSpaceKey,
         TemplateOptionalZWNJKey,
-        TemplatePeriodKey
+        // The period and enter/search keys use the Custom2/Custom1 widths so they render narrow
+        // (see LayoutEngine's custom-width defaults) and the growing space bar absorbs the freed
+        // width. The enter/search key is what apps use to submit in some fields, so it stays.
+        TemplateNarrowPeriodKey,
+        EnterKey(attributes = KeyAttributes(width = KeyWidth.Custom1))
     )
 )
 
