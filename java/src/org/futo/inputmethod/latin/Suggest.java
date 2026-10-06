@@ -247,10 +247,6 @@ public final class Suggest {
                 // If the word is entirely digits, never autocorrect regardless of number row
                 // being active or not
                 || wordComposer.isEntirelyDigits()
-                // If it's an ordinal (1st, 2nd, 3rd), do not autocorrect: the number and its
-                // suffix were typed deliberately on the number row, and the digit->letter
-                // correction already declines to treat an ordinal as a mistap.
-                || wordComposer.isOrdinal(locale)
                 // If it starts with a digit, do not autocorrect, unless it's a digit->letter fix
                 || (wordComposer.startsWithDigit() && !digitToLetterCorrection)
                 // If it's attached to a non word, do not autocorrect
@@ -645,11 +641,6 @@ public final class Suggest {
     public static String findDigitLetterCorrection(final DictionaryFacilitator dictionaryFacilitator,
             final String rawTypedWord) {
         if (dictionaryFacilitator == null || rawTypedWord == null) {
-            return null;
-        }
-        // Ordinals ("2nd", "3rd", "4th", "21st") are deliberate number-row input, not a mistap of
-        // the letters below the digits, so they are never a digit->letter correction.
-        if (rawTypedWord.matches("^(\\d+)(st|nd|rd|th)$")) {
             return null;
         }
         final int length = rawTypedWord.length();

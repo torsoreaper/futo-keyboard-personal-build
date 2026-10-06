@@ -565,10 +565,18 @@ public class LanguageModelFacilitator(
         }
 
         // A token that contains a digit may be a mistap of the number row directly above the top
-        // letter row (e.g. "hell9" -> "hello"). When replacing those digits with the letters below
-        // yields a real word, promote it so it becomes the top suggestion and can be committed.
+        // letter row (e.g. "hell9" -> "hello"). The transformer already reads the sentence, so it
+        // is the context authority: only force the digit->letter reading when the model is not
+        // confidently proposing a different real word that is a plausible correction. This is what
+        // lets context choose between an ordinal and the mistapped word ("2nd" -> "end" in "the end
+        // of the book", "3rd" -> "red" in "that shirt is red") instead of always taking the digits.
         val digitToLetterCandidate = Suggest.findDigitLetterCorrection(dictionaryFacilitator, typedWordForSplit)
-        if(digitToLetterCandidate != null) {
+        val transformerHasBetterReading = digitToLetterCandidate != null
+                && maxWord != null
+                && maxWord.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE
+                && !maxWord.mWord.equals(digitToLetterCandidate, ignoreCase = true)
+                && transformerCorrectionIsPlausible(typedWordForSplit, maxWord.mWord)
+        if(digitToLetterCandidate != null && !transformerHasBetterReading) {
             if(BuildConfig.DEBUG) Log.d(TAG, "promoting digit->letter correction: $digitToLetterCandidate")
             suggestionResults.add(SuggestedWordInfo(
                 digitToLetterCandidate,
