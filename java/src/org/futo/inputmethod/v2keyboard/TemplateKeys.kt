@@ -385,7 +385,13 @@ data class PeriodKey(
      * lets the period key be rendered narrow so the growing space bar absorbs the freed width.
      */
     val width: KeyWidth? = null,
-    val default: AbstractKey = BaseKey(".", attributes = KeyAttributes(width = width)),
+    // A custom (narrow) width makes BaseKey fall back to MoreKeyMode.OnlyFromLetter, which drops
+    // the auto-generated punctuation panel for the period ("." -> "? ! , …"). Force the full mode
+    // so the default long-press set survives the width change.
+    val default: AbstractKey = BaseKey(".", attributes = KeyAttributes(
+        width = width,
+        moreKeyMode = MoreKeyMode.All
+    )),
     val alternative: AbstractKey = BaseKey(".",
         moreKeys = listOf(
             "!text/keyspec_symbols_question",
