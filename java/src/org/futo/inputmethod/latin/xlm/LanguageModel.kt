@@ -135,7 +135,7 @@ class LanguageModel(
         if(matchStart != -1) context = context.substring(matchStart)
 
         // Trim the context
-        val stillNeedTrimming = { context: String -> context.length > 70 || context.count { it == ' ' } > 16 }
+        val stillNeedTrimming = { context: String -> context.length > 110 || context.count { it == ' ' } > 24 }
         if (stillNeedTrimming(context)) {
             val v = context.indexOfLast { it == '.' || it == '?' || it == '!' }
             if (v != -1) {
@@ -148,10 +148,10 @@ class LanguageModel(
         }
 
         if (stillNeedTrimming(context) && context.contains(" ")) {
-            context = context.split(' ').takeLast(5).joinToString(separator = " ")
+            context = context.split(' ').takeLast(8).joinToString(separator = " ")
         }
 
-        if (context.length > 144) {
+        if (context.length > 240) {
             // This context probably contains some spam without adequate whitespace to trim, set it to blank
             context = ""
         }

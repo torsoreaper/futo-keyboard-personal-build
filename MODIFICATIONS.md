@@ -79,6 +79,20 @@ part of the official FUTO Keyboard.
     killed. It records what was typed, the top suggestion and its source, and
     whether it will auto-correct. Controlled from Settings → Miscellaneous.
 
+## Further auto-correction changes
+
+12. **Numbers and times keep their digits.** A token that is only digits plus a
+    unit (`7am`, `30k`, `5x`) or a multi-digit ordinal (`19th`) is no longer put
+    through the digit-to-letter fix, so it cannot be turned into an unrelated
+    word (`yam`, `wok`, `with`). Genuine top-row mistaps still correct
+    (`hell9` -> `hello`, `2nd` -> `end`, `col3man` -> `Coleman`).
+
+13. **The sentence model sees more context.** The text handed to the language
+    model before it is trimmed was raised from about five words / 70 characters
+    to about eight words / 110 characters (and the hard cutoff from 144 to 240),
+    so a word typed with several wrong keys is judged against more of the
+    sentence. This can make the keyboard slightly slower, by design.
+
 ## Reporting problems
 
 Please do not report issues with this build to FUTO. They are not responsible

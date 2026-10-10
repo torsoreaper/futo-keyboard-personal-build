@@ -661,6 +661,16 @@ public final class Suggest {
         }
         final boolean capitalize = Character.isUpperCase(rawTypedWord.charAt(0));
         final String typed = rawTypedWord.toLowerCase(Locale.ROOT);
+        // A token that is only digits plus a unit ("7am", "30k") or a multi-digit
+        // ordinal ("19th") is intentional: its digit->letter reading ("yam", "wok",
+        // "with") is an over-correction, never the intended word. Only these
+        // digits-only tokens are blocked, so letter-containing tokens keep their
+        // fixes ("fr0m"->"from", "b00k"->"book", "t00th"->"tooth", "it3m"->"item")
+        // and the single-digit ordinal "2nd"->"end" still works.
+        if (typed.matches("^\\d+(am|pm|k|m|b|x)$")
+                || typed.matches("^\\d{2,}(st|nd|rd|th)$")) {
+            return null;
+        }
         final String found = searchDigitLetterCorrection(dictionaryFacilitator, typed.toCharArray(), 0);
         if (found == null) {
             return null;
