@@ -48,6 +48,14 @@ object BuiltinWordList {
     )
 
     val ALL: List<String> = (SWEAR_WORDS + OTC_MEDICINES).distinct()
+
+    /**
+     * Lowercase form of [ALL], used to keep these machine-seeded words out of the
+     * personal-dictionary preference path (they are recognised and suggested like any other
+     * dictionary word, but a near-miss of what was typed is not force-preferred over the
+     * sentence). See findCloseUserWord.
+     */
+    val ALL_LOWER: Set<String> = ALL.map { it.lowercase() }.toSet()
 }
 
 val BUILTIN_WORDS_SEEDED = SettingsKey(

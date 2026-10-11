@@ -291,11 +291,14 @@ public final class Suggest {
                 // typed word.
                 hasAutoCorrection = false;
             } else if (!isTypedWordKnown
+                    && firstSuggestion.isAprapreateForAutoCorrection()
                     && !firstSuggestion.mWord.equalsIgnoreCase(consideredWord)
                     && levenshteinDistance(firstSuggestion.mWord, consideredWord)
                             <= MAX_TYPO_EDIT_DISTANCE) {
-                // The typed word isn't a known word and the top candidate is a close match,
-                // so this is a typo: correct it without requiring full confidence.
+                // The typed word isn't a known word and the top candidate is a close match, so
+                // this is a typo: correct it without requiring full confidence. Require the
+                // appropriate-for-auto-correction flag so a transformer guess the merge
+                // deliberately demoted (asPlainSuggestion) cannot be re-committed here.
                 hasAutoCorrection = isAllowedByAutoCorrectionWithSpaceFilter(
                         consideredWord, firstSuggestion);
             } else if (!AutoCorrectionUtils.suggestionExceedsThreshold(

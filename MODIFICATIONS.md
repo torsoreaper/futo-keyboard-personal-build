@@ -58,6 +58,10 @@ part of the official FUTO Keyboard.
 
 8. **Built-in word list.** Common profanity and over-the-counter medicine names
    are seeded into the user dictionary once so they are recognised as words.
+   These seeded words are recognised and suggested like ordinary dictionary
+   words, but they are deliberately kept out of the "prefer a word the user has
+   used before" path, so typing the start of a normal word (`immig` for
+   immigrants) is not force-corrected to a seeded word (`dammit`).
 
 9. **Custom (personal-dictionary) words are treated like normal dictionary words.**
    The personal dictionary used to be pasted into every request sent to the language
@@ -92,6 +96,13 @@ part of the official FUTO Keyboard.
     to about eight words / 110 characters (and the hard cutoff from 144 to 240),
     so a word typed with several wrong keys is judged against more of the
     sentence. This can make the keyboard slightly slower, by design.
+
+14. **A close typo is only committed when the keyboard is sure.** When the typed
+    word is not a known word and the best suggestion is a close match, it used
+    to be committed without the normal confidence check. It now additionally
+    requires the suggestion to be marked appropriate for auto-correction, so a
+    guess the sentence model offered but that the merge deliberately demoted (an
+    invented word) cannot be committed by pressing space.
 
 ## Reporting problems
 

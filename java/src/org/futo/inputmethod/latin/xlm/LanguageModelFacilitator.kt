@@ -28,6 +28,7 @@ import org.futo.inputmethod.latin.SuggestionBlacklist
 import org.futo.inputmethod.latin.common.ComposedData
 import org.futo.inputmethod.latin.inputlogic.InputLogic
 import org.futo.inputmethod.latin.settings.Settings
+import org.futo.inputmethod.latin.uix.BuiltinWordList
 import org.futo.inputmethod.latin.uix.SettingsKey
 import org.futo.inputmethod.latin.uix.USE_TRANSFORMER_FINETUNING
 import org.futo.inputmethod.latin.uix.getSetting
@@ -357,6 +358,11 @@ public class LanguageModelFacilitator(
                 val type = it.mSourceDict?.mDictType
                 type == Dictionary.TYPE_USER || type == Dictionary.TYPE_USER_HISTORY
             }
+            // Machine-seeded built-in words (profanity / OTC medicine names) must not use the
+            // user-word preference: they are recognised and suggested like any other dictionary
+            // word, but a near-miss of what was typed must not be force-promoted to them. That
+            // produced "immig" -> "dammit", "evap" -> "crap", "Wti" -> "Wtf" and similar.
+            .filter { it.mWord.lowercase() !in BuiltinWordList.ALL_LOWER }
             // A user word is preferred as a single token. Multi-word history phrases
             // ("have i", "do i") are not a replacement for what was typed, and preferring one
             // produces the same context-blind split the space-split logic is careful about.
@@ -495,11 +501,16 @@ public class LanguageModelFacilitator(
         // "mouthguard" instead of the model's inventions ("deepsells", "Northern").
         val userWordCandidate = findCloseUserWord(typedWordForSplit, suggestedWordsDictList, maxWord)
 
-        // A real-word allowlist correction ("id" -> "I'd", "tine" -> "time") is kept at MAX_SCORE
+        // A real-word allowlist correction ("id" -> "I'd", "tine" -> "time") is pinned at MAX_SCORE
         // by the native side so it can be the dictionary's top candidate and be committed when the
         // model agrees with it. But it must not count as a strong dictionary opinion when the model
-        // confidently wants a different word: otherwise it blocks the model's context reading.
-        // Typing "id" in "This __ the best" never became "is" because "I'd" was pinned on top.
+        // confidently wants a different word. The native side emits the real-word allowlist case as
+        // KIND_CORRECTION at MAX_SCORE (outputShortcuts in suggestions_output_utils.cpp) and only
+        // the non-word typed case ("alot" -> "a lot") as KIND_WHITELIST, which must stay
+        // unconditional because no legitimate word competes with it. So a pinned top that is NOT
+        // KIND_WHITELIST is the real-word allowlist correction; the digit->letter injection (also
+        // MAX_SCORE, KIND_CORRECTION, but mSourceDict == null) is handled separately by
+        // transformerHasBetterReading above.
         val dictTopIsPinnedAllowlistCorrection = maxWordDict != null
                 && maxWordDict.mScore == SuggestedWordInfo.MAX_SCORE
                 && !maxWordDict.isKindOf(SuggestedWordInfo.KIND_WHITELIST)
