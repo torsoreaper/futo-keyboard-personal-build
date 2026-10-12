@@ -104,6 +104,29 @@ part of the official FUTO Keyboard.
     guess the sentence model offered but that the merge deliberately demoted (an
     invented word) cannot be committed by pressing space.
 
+15. **A suggestion the sentence model only echoed back no longer blocks the
+    dictionary's own correction.** The model returns the word being typed as one
+    of its candidates; because the suggestion list is ordered by score, that echo
+    could sit above the dictionary's correction, and the keyboard would then
+    decide "the typed word is already the best suggestion" and commit the typo
+    when space was pressed (`habe`, `parb`, `tha`, `ans`). The dictionary's
+    correction now takes the auto-correction slot instead. It is deliberately
+    narrow, so a word you meant is never rewritten: the echo must be byte for
+    byte what was typed (so the model's own capitalised word such as `Danaher` is
+    left alone), the dictionary's word must begin with the same letter (so
+    `danaher` -> `manager`, `descale` -> `rescale` and `auth` -> `with` cannot
+    happen), must be positively scored and marked appropriate by the dictionary,
+    and must be within two edits. A deliberate elongation such as `Ohhhh` is
+    never shortened.
+
+16. **When the sentence model has no idea, the dictionary's ordinary word is
+    used.** If what was typed is not a word and the model's best guess is further
+    away than a word in the built-in dictionary, that dictionary word is now
+    preferred, so `calen` -> `Caleb`, `remt` -> `rent`, `temijd` -> `remind`,
+    `jiu` -> `you` and `deepseel`-style near misses land on a real word. Words
+    with a negative dictionary score are ignored, and a token containing a digit
+    is never touched, so `7am`, `30k`, `40s` and `19th` keep their digits.
+
 ## Reporting problems
 
 Please do not report issues with this build to FUTO. They are not responsible

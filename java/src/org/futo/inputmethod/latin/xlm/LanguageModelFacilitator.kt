@@ -219,6 +219,18 @@ private fun levenshteinDistance(s1: String, s2: String): Int {
     return dist[len1][len2]
 }
 
+/**
+ * [typed] is [candidate] with the candidate's last letter repeated ("ohh" vs "oh", "gooo" vs "go",
+ * "yesss" vs "yes"). That is a deliberate stylised elongation, not a typo, so it must not be
+ * rewritten to the shorter word.
+ */
+private fun isDeliberateElongationOf(typed: String, candidate: String): Boolean {
+    if (typed.length <= candidate.length) return false
+    if (!typed.startsWith(candidate, ignoreCase = true)) return false
+    val last = candidate.last().lowercaseChar()
+    return typed.substring(candidate.length).all { it.lowercaseChar() == last }
+}
+
 public class LanguageModelFacilitator(
     val context: Context,
     val inputLogic: InputLogic,
@@ -349,6 +361,10 @@ public class LanguageModelFacilitator(
         modelTop: SuggestedWordInfo?
     ): SuggestedWordInfo? {
         if (typed.length < 3) return null
+        // A token containing a digit is intentional: "7am", "30k", "40s", "19th" must keep their
+        // digits rather than being read as "yam", "wok", "red", "with". The digit->letter mistap
+        // logic handles genuine cases such as "hell9" -> "hello" separately.
+        if (typed.any { it.isDigit() }) return null
         if (dictionaryFacilitator.isValidSpellingWord(typed)) return null
         val lowerTyped = typed.lowercase()
         val modelDistance = modelTop?.let { levenshteinDistance(lowerTyped, it.mWord.lowercase()) }
@@ -356,13 +372,23 @@ public class LanguageModelFacilitator(
             .asSequence()
             .filter {
                 val type = it.mSourceDict?.mDictType
+                // A built-in dictionary word counts here too: when the model has no close reading
+                // of a non-word ("calen" -> the model wants "Facebook") the dictionary's ordinary
+                // word ("Caleb") is the better answer. The distance < modelDistance test below is
+                // what keeps this from overriding the model whenever the model does have an
+                // opinion, and it also protects the user's own words (the model echoes those).
                 type == Dictionary.TYPE_USER || type == Dictionary.TYPE_USER_HISTORY
+                        || type == Dictionary.TYPE_MAIN
             }
             // Machine-seeded built-in words (profanity / OTC medicine names) must not use the
             // user-word preference: they are recognised and suggested like any other dictionary
             // word, but a near-miss of what was typed must not be force-promoted to them. That
             // produced "immig" -> "dammit", "evap" -> "crap", "Wti" -> "Wtf" and similar.
             .filter { it.mWord.lowercase() !in BuiltinWordList.ALL_LOWER }
+            // A negative score means the dictionary has no real opinion about this word, so it is
+            // not a credible replacement (it is how "holosun" would otherwise become "Holbein").
+            .filter { it.mScore > 0 }
+            .filter { it.isAprapreateForAutoCorrection() }
             // A user word is preferred as a single token. Multi-word history phrases
             // ("have i", "do i") are not a replacement for what was typed, and preferring one
             // produces the same context-blind split the space-split logic is careful about.
@@ -519,9 +545,44 @@ public class LanguageModelFacilitator(
                         && maxWord != null && maxWordDict.mWord != maxWord.mWord)
         val transformerIsConfident = maxWord != null && maxWord.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE
 
+        // The transformer echoes the typed word straight back as one of its candidates (its kind
+        // carries KIND_FLAG_EXACT_MATCH and its source dictionary is null), and because the
+        // suggestion strip is ordered by score that echo can outrank the dictionary's own
+        // correction. Suggest.obtainNonBatchedInputSuggestedWords then sees "the typed word is the
+        // top suggestion" and refuses to auto-correct at all, so pressing space commits the typo
+        // ("habe", "parb", "tha", "ans"). When the dictionary does offer a close, appropriate
+        // correction for a token that is not itself a word, let that correction take the
+        // auto-correction slot instead.
+        //
+        // The gates are deliberately narrow, because over-correcting a real word is as bad as
+        // missing one: the echo must be byte-for-byte what was typed (so the model's own
+        // capitalised word such as "Danaher" or "Tazo" is left alone), the dictionary's word must
+        // start with the same letter (so "danaher" -> "manager", "descale" -> "rescale" and
+        // "auth" -> "with" can never happen), must be positively scored and flagged appropriate by
+        // the native side, and must be within two edits.
+        val typedWordForEcho = values.composedData.mTypedWord
+        val dictionaryCorrectionBeatsEcho: SuggestedWordInfo? = if (
+                maxWord != null && maxWordDict != null
+                && typedWordForEcho.isNotEmpty()
+                && maxWord.mWord == typedWordForEcho
+                && !maxWordDict.mWord.equals(typedWordForEcho, ignoreCase = true)
+                && maxWordDict.mScore > 0
+                && maxWordDict.isAprapreateForAutoCorrection()
+                && !dictionaryFacilitator.isValidSpellingWord(typedWordForEcho)
+                && maxWordDict.mWord.first().equals(typedWordForEcho.first(), ignoreCase = true)
+                && !isDeliberateElongationOf(typedWordForEcho, maxWordDict.mWord)
+                && levenshteinDistance(typedWordForEcho.lowercase(), maxWordDict.mWord.lowercase()) <= 2
+        ) maxWordDict else null
+
         var autocorrectWord: SuggestedWordInfo? = null
         val filtered = mutableListOf<SuggestedWordInfo>()
-        if (userWordCandidate != null && maxWord != null) {
+        if (dictionaryCorrectionBeatsEcho != null && maxWord != null) {
+            if(BuildConfig.DEBUG) Log.d(TAG, "dictionary correction '${dictionaryCorrectionBeatsEcho.mWord}' beats transformer echo of '$typedWordForEcho'")
+            val clone = dictionaryCorrectionBeatsEcho.scoreAtLeast(maxWord)
+            autocorrectWord = clone
+            suggestionResults.add(clone)
+            filtered.add(dictionaryCorrectionBeatsEcho)
+        } else if (userWordCandidate != null && maxWord != null) {
             if(BuildConfig.DEBUG) Log.d(TAG, "preferring user word '${userWordCandidate.mWord}' over model '${maxWord.mWord}'")
             val clone = userWordCandidate.scoreAtLeast(maxWord)
             autocorrectWord = clone
