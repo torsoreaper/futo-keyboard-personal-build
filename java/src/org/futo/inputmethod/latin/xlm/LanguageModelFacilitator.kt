@@ -907,13 +907,22 @@ public class LanguageModelFacilitator(
         // to suggest and why, without the full candidate list.
         if(DebugFileLogger.isEnabled()) {
             val dmpw: (SuggestedWordInfo?) -> String = { v -> v?.let { "${it.mWord}(${it.mScore})" } ?: "[null]" }
+            // The top of the strip exactly as the user sees it, so a candidate that was visible but
+            // not committable can be told apart from one that was never offered. This is what
+            // answers "I could see the word in the suggestions but space did not take it": the
+            // word, its rank, score, kind and source are all here. Capped at 10 — the full dump is
+            // ~90 candidates per keystroke and stringifying all of them causes lag.
+            val stripTop = suggestedWords.mSuggestedWordInfoList.drop(1).take(10).joinToString(" ") {
+                "${it.mWord}:${it.mScore}:${it.mKindAndFlags}:${it.mSourceDict?.mDictType ?: "null"}"
+            }
             DebugFileLogger.log(TAG +
                     " merge: typed=${values.composedData.mTypedWord}" +
                     " lmTop=${dmpw(maxWord)}" +
                     " dictTop=${dmpw(maxWordDict)}" +
                     " lmSuggestions=${lmSuggestions.size}" +
                     " dictCandidates=${suggestedWordsDictList.size}" +
-                    " finalSuggestions=${suggestedWords.mSuggestedWordInfoList.size}")
+                    " finalSuggestions=${suggestedWords.mSuggestedWordInfoList.size}" +
+                    " strip=[$stripTop]")
         }
 
 
