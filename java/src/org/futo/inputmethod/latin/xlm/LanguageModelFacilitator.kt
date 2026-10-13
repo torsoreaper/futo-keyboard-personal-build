@@ -697,30 +697,43 @@ public class LanguageModelFacilitator(
                 && isSingleNeighbouringKeySlip(typedWordForEcho, maxWordDict.mWord, neighbourLimit)
         ) maxWordDict else null
 
-        // A single wrong key is the shape of a fast typist's mistake, so when the model proposes a
+        // A single wrong key is the shape of a fast typist's mistake, so when the model offers a
         // word that differs from what was typed by exactly one NEIGHBOURING key, treat it as a typo
         // and let it commit even though the model did not mark it appropriate-for-auto-correction.
-        // This is what makes "noe" -> now and "voicemaols" -> voicemails commit on space. The
-        // second case matters because the merge's other transformer paths require the model's word
-        // to be a word the dictionary knows, and "voicemails" is not. The same-length,
-        // same-first-letter, not-an-echo and neighbouring-key tests keep a word the user meant as
-        // typed: the model must be actively proposing a change, only one key may differ, the first
-        // letter must be unchanged, and the model must be as sure of it as any other transformer
-        // commit is required to be (MIN_TRANSFORMER_AUTOCORRECT_SCORE).
-        val singleKeySlipTop: SuggestedWordInfo? = if (
-                maxWord != null && typedWordForEcho.isNotEmpty()
-                && isSingleNeighbouringKeySlip(typedWordForEcho, maxWord.mWord, neighbourLimit)
-                && !isKnownWord(typedWordForEcho)
-                && !maxWord.mWord.equals(typedWordForEcho, ignoreCase = true)
-                && maxWord.mWord.first().equals(typedWordForEcho.first(), ignoreCase = true)
-                && maxWord.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE
-        ) maxWord else null
+        // This is what makes "noe" -> now, "voicemaols" -> voicemails and "opencofe" -> opencode
+        // commit on space. The second and third cases matter because the merge's other transformer
+        // paths require the model's word to be one the dictionary knows, and neither "voicemails"
+        // nor "opencode" is.
+        //
+        // The search covers the model's WHOLE candidate list, not just its top word. The top is
+        // often a plausible but wrong reading ("opencofe" -> "open-coffee", with "cofe" reading as
+        // "coffee") while the word the user wanted sits lower in the strip: visible, tappable, and
+        // yet unusable by the commit logic. Every candidate faces the same gates and the
+        // best-scoring one that qualifies wins: the model must be actively proposing a change, only
+        // one key may differ (and it must be one that touches), the first letter must be unchanged,
+        // the typed token must not be a known word, and the candidate must be as sure as any other
+        // transformer commit is required to be (MIN_TRANSFORMER_AUTOCORRECT_SCORE).
+        val singleKeySlipTop: SuggestedWordInfo? =
+                if (typedWordForEcho.isNotEmpty() && !isKnownWord(typedWordForEcho)) {
+                    reweightedSuggestions
+                        .filter { !it.mWord.equals(typedWordForEcho, ignoreCase = true) }
+                        .filter {
+                            it.mWord.isNotEmpty()
+                                    && it.mWord.first().equals(typedWordForEcho.first(), ignoreCase = true)
+                        }
+                        .filter { isSingleNeighbouringKeySlip(typedWordForEcho, it.mWord, neighbourLimit) }
+                        .filter { it.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE }
+                        .maxByOrNull { it.mScore }
+                } else null
 
         var autocorrectWord: SuggestedWordInfo? = null
         val filtered = mutableListOf<SuggestedWordInfo>()
-        if (singleKeySlipTop != null) {
+        if (singleKeySlipTop != null && maxWord != null) {
             if(BuildConfig.DEBUG) Log.d(TAG, "single neighbouring-key slip '${singleKeySlipTop.mWord}' replaces '$typedWordForEcho'")
-            val clone = singleKeySlipTop.scoreAtLeast(singleKeySlipTop)
+            // Outrank the model's own top word: the slip candidate is often ranked below it, and
+            // scoreAtLeast(maxWord) is what puts it in the auto-correction slot (Suggest reads the
+            // strip's first element). Self-promotion would leave it below the top and change nothing.
+            val clone = singleKeySlipTop.scoreAtLeast(maxWord)
             autocorrectWord = clone
             suggestionResults.add(clone)
             filtered.add(singleKeySlipTop)
