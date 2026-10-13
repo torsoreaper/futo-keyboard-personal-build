@@ -171,6 +171,24 @@ part of the official FUTO Keyboard.
     only words you blacklist, one at a time, and is reversible from the same
     screen.
 
+19. **A correction can now use any of the model's suggestions, not just its
+    favourite.** The sentence model's top guess is often plausible but wrong
+    (`opencofe` was read as `open-coffee`, with `cofe` becoming `coffee`), while the
+    word you wanted sat lower in the suggestion strip — visible, tappable, and yet
+    unusable when you pressed space. The single-wrong-key rule now looks through the
+    model's whole candidate list and takes the best one that still satisfies it
+    (same length, one neighbouring key changed, same first letter, the model
+    confident). Anything the keyboard is willing to *show* as a correction is now
+    also something it is willing to *commit*.
+
+20. **A word you pick by hand is remembered as a real word.** Tapping a suggestion
+    the keyboard did not know (for example `opencode`) used to record it as an
+    "unrecognised" entry: kept for the model, but never offered back, so you had to
+    tap it again every time. A manual pick is now stored as a valid word, because
+    tapping it is you saying "this is the word I meant". Tapping the typed form
+    itself to keep it is deliberately *not* treated that way — that would turn a
+    kept typo into a preferred correction later.
+
 ## Reporting problems
 
 Please do not report issues with this build to FUTO. They are not responsible
