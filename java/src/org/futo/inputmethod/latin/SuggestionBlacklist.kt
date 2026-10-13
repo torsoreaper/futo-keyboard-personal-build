@@ -47,8 +47,16 @@ class SuggestionBlacklist(val settings: Settings, val context: Context, val life
         ).distinct()
     }
 
+    /**
+     * Whether the user has explicitly blacklisted [word], in any capitalisation. The capital
+     * variants are used for the same reason as in GeneralIME: the dictionary stores its own
+     * capitalisation ("Noe"), so an exact match would miss it.
+     */
+    fun isUserBlacklisted(word: String): Boolean =
+        getCapitalVariants(word).any { it in userBlacklistedWords }
+
     fun isWordOk(word: String): Boolean {
-        if(word in userBlacklistedWords) return false
+        if(isUserBlacklisted(word)) return false
         if(shouldBlockWord(mode, word)) return false
         return true
     }

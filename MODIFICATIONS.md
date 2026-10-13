@@ -159,6 +159,18 @@ part of the official FUTO Keyboard.
     as any other transformer correction before this applies, so an unsure guess
     still just sits in the strip.
 
+18. **A word you blacklist is no longer treated as a word.** Settings -> Predictive
+    text -> Word blacklist already stopped a word being suggested, but the keyboard
+    still counted it as a known word, and a known word is deliberately never
+    auto-corrected unless the sentence model's context overrides it. So a word you
+    had explicitly rejected could sit there blocking typo detection for that
+    spelling. Now a blacklisted word counts as unknown, so `noe` (which is in the
+    built-in dictionary, at a low frequency, as a name) can be corrected to `now`.
+    The blacklist match is also case-insensitive now, so blacklisting `noe` also
+    removes the dictionary's capitalised `Noe` from the suggestions. This affects
+    only words you blacklist, one at a time, and is reversible from the same
+    screen.
+
 ## Reporting problems
 
 Please do not report issues with this build to FUTO. They are not responsible

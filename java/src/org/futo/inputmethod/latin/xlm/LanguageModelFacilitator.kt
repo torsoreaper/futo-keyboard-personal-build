@@ -450,6 +450,20 @@ public class LanguageModelFacilitator(
     }
 
     /**
+     * Whether what was typed is a word the keyboard should treat as known. A word the user has
+     * explicitly blacklisted is not: blacklisting means "do not use this word", so it must not
+     * also be a reason to refuse to fix a typo in that spelling. Without this a dictionary entry
+     * the user does not want ("noe", a stale name) blocks the typo rules permanently.
+     *
+     * Only the two neighbouring-key promotions use this. The global isTypedWordKnown flag passed
+     * to Suggest is deliberately left on isValidSpellingWord, because flipping that would let any
+     * appropriate-flagged candidate within two edits be committed for a blacklisted word with no
+     * threshold or geometry check at all.
+     */
+    private fun isKnownWord(typed: String): Boolean =
+        dictionaryFacilitator.isValidSpellingWord(typed) && !suggestionBlacklist.isUserBlacklisted(typed)
+
+    /**
      * The closest word from the user's own dictionaries (personal dictionary or typing history)
      * to [typed], when what was typed is not itself a word and the user's word is a closer match
      * than the model's top guess. This is what turns "deepseel" into the "deepseek" the user has
@@ -677,7 +691,7 @@ public class LanguageModelFacilitator(
                 && !maxWordDict.mWord.equals(typedWordForEcho, ignoreCase = true)
                 && maxWordDict.mScore > 0
                 && maxWordDict.isAprapreateForAutoCorrection()
-                && !dictionaryFacilitator.isValidSpellingWord(typedWordForEcho)
+                && !isKnownWord(typedWordForEcho)
                 && maxWordDict.mWord.first().equals(typedWordForEcho.first(), ignoreCase = true)
                 && !isDeliberateElongationOf(typedWordForEcho, maxWordDict.mWord)
                 && isSingleNeighbouringKeySlip(typedWordForEcho, maxWordDict.mWord, neighbourLimit)
@@ -696,7 +710,7 @@ public class LanguageModelFacilitator(
         val singleKeySlipTop: SuggestedWordInfo? = if (
                 maxWord != null && typedWordForEcho.isNotEmpty()
                 && isSingleNeighbouringKeySlip(typedWordForEcho, maxWord.mWord, neighbourLimit)
-                && !dictionaryFacilitator.isValidSpellingWord(typedWordForEcho)
+                && !isKnownWord(typedWordForEcho)
                 && !maxWord.mWord.equals(typedWordForEcho, ignoreCase = true)
                 && maxWord.mWord.first().equals(typedWordForEcho.first(), ignoreCase = true)
                 && maxWord.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE
