@@ -131,6 +131,16 @@ part of the official FUTO Keyboard.
     and `19th` keep their digits, and a candidate the dictionary scores below zero
     is ignored, so it cannot become the top suggestion.
 
+17. **One wrong key is corrected even when the sentence model was the only one to
+    spot the word.** If what you typed is not a word and the model proposes a word
+    that differs by exactly one neighbouring key — same length, same first letter —
+    that word is committed on space. This fixes `noe` -> `now` and `voicemaols` ->
+    `voicemails` (the model had the right word, but `voicemails` is not in the
+    keyboard's dictionary, and a model guess without the dictionary's blessing was
+    being downgraded to a tappable suggestion only). The model must be as confident
+    as any other transformer correction before this applies, so an unsure guess
+    still just sits in the strip.
+
 ## Reporting problems
 
 Please do not report issues with this build to FUTO. They are not responsible

@@ -627,9 +627,34 @@ public class LanguageModelFacilitator(
                 && isSingleNeighbouringKeySlip(typedWordForEcho, maxWordDict.mWord)
         ) maxWordDict else null
 
+        // A single wrong key is the shape of a fast typist's mistake, so when the model proposes a
+        // word that differs from what was typed by exactly one NEIGHBOURING key, treat it as a typo
+        // and let it commit even though the model did not mark it appropriate-for-auto-correction.
+        // This is what makes "noe" -> now and "voicemaols" -> voicemails commit on space. The
+        // second case matters because the merge's other transformer paths require the model's word
+        // to be a word the dictionary knows, and "voicemails" is not. The same-length,
+        // same-first-letter, not-an-echo and neighbouring-key tests keep a word the user meant as
+        // typed: the model must be actively proposing a change, only one key may differ, the first
+        // letter must be unchanged, and the model must be as sure of it as any other transformer
+        // commit is required to be (MIN_TRANSFORMER_AUTOCORRECT_SCORE).
+        val singleKeySlipTop: SuggestedWordInfo? = if (
+                maxWord != null && typedWordForEcho.isNotEmpty()
+                && isSingleNeighbouringKeySlip(typedWordForEcho, maxWord.mWord)
+                && !dictionaryFacilitator.isValidSpellingWord(typedWordForEcho)
+                && !maxWord.mWord.equals(typedWordForEcho, ignoreCase = true)
+                && maxWord.mWord.first().equals(typedWordForEcho.first(), ignoreCase = true)
+                && maxWord.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE
+        ) maxWord else null
+
         var autocorrectWord: SuggestedWordInfo? = null
         val filtered = mutableListOf<SuggestedWordInfo>()
-        if (dictionaryCorrectionBeatsEcho != null && maxWord != null) {
+        if (singleKeySlipTop != null) {
+            if(BuildConfig.DEBUG) Log.d(TAG, "single neighbouring-key slip '${singleKeySlipTop.mWord}' replaces '$typedWordForEcho'")
+            val clone = singleKeySlipTop.scoreAtLeast(singleKeySlipTop)
+            autocorrectWord = clone
+            suggestionResults.add(clone)
+            filtered.add(singleKeySlipTop)
+        } else if (dictionaryCorrectionBeatsEcho != null && maxWord != null) {
             if(BuildConfig.DEBUG) Log.d(TAG, "dictionary correction '${dictionaryCorrectionBeatsEcho.mWord}' beats transformer echo of '$typedWordForEcho'")
             val clone = dictionaryCorrectionBeatsEcho.scoreAtLeast(maxWord)
             autocorrectWord = clone
