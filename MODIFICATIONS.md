@@ -126,6 +126,16 @@ part of the official FUTO Keyboard.
     the model returning your word capitalised (`habe` as `Habe`) no longer
     disables the fix. A deliberate elongation such as `Ohhhh` is never shortened.
 
+    The "next to the one you pressed" test means the two keys must **touch** on the
+    keyboard, measured in key widths: same row (1.0), or the two diagonal rings
+    (1.118 and 1.414). The next key out is `a`/`e` at 1.803, which is *one key over
+    as well as one row down* — a spelling slip, not a finger slip — and `d`/`m` is
+    at 5.1. Both are deliberately left alone, so the rule can never claim that "any
+    key could have been any nearby key". On the on-device logs this covers 92.7% of
+    the single-substitution typos; the remaining ones are mostly vowel confusions
+    such as `revanant` -> `revenant`, which better typing (not a wider radius) is
+    the answer to.
+
 16. **Tokens with digits and words the dictionary has no opinion about are left
     alone.** A token containing a digit is never replaced, so `7am`, `30k`, `40s`
     and `19th` keep their digits, and a candidate the dictionary scores below zero

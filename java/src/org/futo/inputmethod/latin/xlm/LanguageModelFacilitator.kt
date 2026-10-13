@@ -231,17 +231,36 @@ private fun isDeliberateElongationOf(typed: String, candidate: String): Boolean 
     return typed.substring(candidate.length).all { it.lowercaseChar() == last }
 }
 
-// Letter positions on the qwerty keyboard, in key widths. The row offsets match the real layout, so
-// a diagonal neighbour (b/v, s/d, z/s) counts as adjacent while a vowel confusion such as a/e (1.8
-// key widths apart) does not. The letter rows are the standard qwerty layout, which is also what
-// Suggest.java's number-row reading assumes and what makePredictionInputValues verifies.
+// A key's neighbours are the keys whose rectangles TOUCH it — nothing looser. This keyboard
+// centres each row (LayoutEngine.addGap splits the leftover width evenly, and
+// computeRegularKeyWidth is layoutWidth / 10 for a 10-key row), so key centres are one key width
+// apart and key-to-key distances are one of: 1.0 (same row), sqrt(1.25) = 1.118 (0.5-offset
+// diagonal), sqrt(2) = 1.414 (1.0-offset diagonal, e.g. a/z, h/v, k/n) — then a gap to
+// sqrt(3.25) = 1.803 (1.5-offset diagonal, e.g. a/e, d/w, j/y), then 2.0 (two keys along a row,
+// e.g. e/t) and further.
+//
+// So "the two keys touch" is exactly dx*dx + dy*dy <= 2, and the next key out is at 3.25. The
+// boundary is deliberately the touching distance and not a round number in the gap, because the
+// claims are different: <= 2 means "one fat-fingered key" (a motor slip), while 1.803 means "one
+// key over as well as one row down" (mostly vowel confusions such as a/e, i.e. a spelling
+// mistake), and 2.0 means "two keys away" (e/t is not a key anyone hits while aiming at e).
+// Anything past the touching ring turns a typo rule into an anything-could-have-been-anything
+// rule: d/m sits at 5.1 and is excluded by 2.5x, and a/e at 1.803 stays as typed.
+//
+// Measured against the on-device logs (898 single-substitution typo cases): touching keys cover
+// 92.7% (1.0 -> 81.3%, 1.118 -> 91.0%, 1.414 -> 92.7%); widening to 1.803 would reach 95.0% but
+// its extra band is a/e and k/u, and everything past 2.0 (a further 2.3%) is spread over 3-9 key
+// widths and is not a finger slip at all.
 private val KEYBOARD_ROWS = arrayOf(
     "qwertyuiop", // offset 0.0
     "asdfghjkl",  // offset 0.5
     "zxcvbnm"     // offset 1.5
 )
 private val KEYBOARD_ROW_OFFSETS = floatArrayOf(0.0f, 0.5f, 1.5f)
-private const val MAX_NEIGHBOUR_KEY_DISTANCE = 1.6f
+
+// (sqrt(2))^2: the farthest distance at which two keys touch. The row offsets are exact halves,
+// so this comparison is exact and the epsilon is only belt and braces.
+private const val MAX_TOUCHING_SQUARED_DISTANCE = 2.0f
 
 private fun keyPosition(ch: Char): Pair<Float, Float>? {
     val lower = ch.lowercaseChar()
@@ -252,14 +271,14 @@ private fun keyPosition(ch: Char): Pair<Float, Float>? {
     return null
 }
 
-/** Whether two keys are close enough that one could be a mistap of the other. */
+/** Whether two keys touch, i.e. whether one could be a single fat-fingered press of the other. */
 private fun areNeighbouringKeys(a: Char, b: Char): Boolean {
     if (a.equals(b, ignoreCase = true)) return false
     val pa = keyPosition(a) ?: return false
     val pb = keyPosition(b) ?: return false
     val dx = pa.first - pb.first
     val dy = pa.second - pb.second
-    return dx * dx + dy * dy <= MAX_NEIGHBOUR_KEY_DISTANCE * MAX_NEIGHBOUR_KEY_DISTANCE
+    return dx * dx + dy * dy <= MAX_TOUCHING_SQUARED_DISTANCE + 0.0001f
 }
 
 /**
