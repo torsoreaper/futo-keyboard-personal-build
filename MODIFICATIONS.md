@@ -113,12 +113,14 @@ part of the official FUTO Keyboard.
     correction now takes the auto-correction slot instead. The gates are narrow,
     because over-correcting a word you meant is as bad as missing one: the
     dictionary's word must be the **same length as what you typed with exactly one
-    character substituted**, must **begin with the same letter**, and must be
-    positively scored and marked appropriate by the dictionary. That is the shape
-    of a single wrong key, so `habe` -> `have`, `tha` -> `the`, `ans` -> `and`,
-    `licky` -> `lucky` and `revanant` -> `revenant` are fixed, while `tazo` ->
-    `task` and `parb` -> `path` (two wrong keys), `bluesky` -> `bluesy`,
-    `twlo` -> `two` and `pre` -> `press` (a dropped or added key),
+    character replaced by a key that is next to the one you pressed**, must
+    **begin with the same letter**, and must be positively scored and marked
+    appropriate by the dictionary. That is the shape of a single fat-fingered
+    key, so `habe` -> `have` (b next to v), `ans` -> `and` (s next to d),
+    `licky` -> `lucky` (i next to u) and `boble` -> `Bible` (o next to i) are
+    fixed, while `tazo` -> `task` and `parb` -> `path` (two wrong keys),
+    `bluesky` -> `bluesy`, `twlo` -> `two` and `pre` -> `press` (a dropped or
+    added key), `tha` -> `the` and `revanant` -> `revenant` (a is not next to e),
     `danaher` -> `manager`, `auth` -> `with`, `descale` -> `rescale` and
     `7am` -> `jam` all stay exactly as typed. Sentence-initial typos work too, so
     the model returning your word capitalised (`habe` as `Habe`) no longer

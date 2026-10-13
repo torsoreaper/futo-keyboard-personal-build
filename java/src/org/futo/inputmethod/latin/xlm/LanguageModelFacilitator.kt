@@ -231,6 +231,55 @@ private fun isDeliberateElongationOf(typed: String, candidate: String): Boolean 
     return typed.substring(candidate.length).all { it.lowercaseChar() == last }
 }
 
+// Letter positions on the qwerty keyboard, in key widths. The row offsets match the real layout, so
+// a diagonal neighbour (b/v, s/d, z/s) counts as adjacent while a vowel confusion such as a/e (1.8
+// key widths apart) does not. The letter rows are the standard qwerty layout, which is also what
+// Suggest.java's number-row reading assumes and what makePredictionInputValues verifies.
+private val KEYBOARD_ROWS = arrayOf(
+    "qwertyuiop", // offset 0.0
+    "asdfghjkl",  // offset 0.5
+    "zxcvbnm"     // offset 1.5
+)
+private val KEYBOARD_ROW_OFFSETS = floatArrayOf(0.0f, 0.5f, 1.5f)
+private const val MAX_NEIGHBOUR_KEY_DISTANCE = 1.6f
+
+private fun keyPosition(ch: Char): Pair<Float, Float>? {
+    val lower = ch.lowercaseChar()
+    for (row in KEYBOARD_ROWS.indices) {
+        val index = KEYBOARD_ROWS[row].indexOf(lower)
+        if (index >= 0) return (index + KEYBOARD_ROW_OFFSETS[row]) to row.toFloat()
+    }
+    return null
+}
+
+/** Whether two keys are close enough that one could be a mistap of the other. */
+private fun areNeighbouringKeys(a: Char, b: Char): Boolean {
+    if (a.equals(b, ignoreCase = true)) return false
+    val pa = keyPosition(a) ?: return false
+    val pb = keyPosition(b) ?: return false
+    val dx = pa.first - pb.first
+    val dy = pa.second - pb.second
+    return dx * dx + dy * dy <= MAX_NEIGHBOUR_KEY_DISTANCE * MAX_NEIGHBOUR_KEY_DISTANCE
+}
+
+/**
+ * Whether [candidate] is what was typed with exactly one character replaced by a NEIGHBOURING key.
+ * That is the shape of a single fat-fingered key: "habe"/"have" (b next to v), "ans"/"and" (s next
+ * to d). A substitution between keys that are not neighbours is not a finger slip, so "tha"/"the"
+ * and "revanant"/"revenant" (a and e are 1.8 key widths apart) are not treated as typos, and a
+ * dropped or added key is excluded too because it is the shape of "bluesky"/"bluesy".
+ */
+private fun isSingleNeighbouringKeySlip(typed: String, candidate: String): Boolean {
+    if (typed.length != candidate.length) return false
+    var differing = -1
+    for (i in typed.indices) {
+        if (typed[i].equals(candidate[i], ignoreCase = true)) continue
+        if (differing >= 0) return false
+        differing = i
+    }
+    return differing >= 0 && areNeighbouringKeys(typed[differing], candidate[differing])
+}
+
 public class LanguageModelFacilitator(
     val context: Context,
     val inputLogic: InputLogic,
@@ -557,12 +606,13 @@ public class LanguageModelFacilitator(
         // missing one. The echo is compared ignoring case, because the model returns the typed
         // word capitalised at the start of a sentence ("habe" comes back as "Habe", "parb" as
         // "Parb"), which used to defeat this branch completely. The dictionary's word must be the
-        // SAME LENGTH as what was typed with exactly ONE character substituted, and must start
-        // with the same letter. That is the shape of a single fat-fingered key, and it is what
-        // keeps the deliberate words alphabetically close to real ones: "tazo" -> "task" and
-        // "parb" -> "path" (two substitutions), "bluesky" -> "bluesy" and "twlo" -> "two" and
-        // "pre" -> "press" (different length, so a dropped or added key), "7am" -> "jam",
-        // "danaher" -> "manager", "auth" -> "with" and "descale" -> "rescale" all stay as typed.
+        // SAME LENGTH as what was typed with exactly ONE character replaced by a NEIGHBOURING key,
+        // and must start with the same letter. That is the shape of a single fat-fingered key, and
+        // it is what keeps everything else as typed: "tazo" -> "task" and "parb" -> "path" (two
+        // substitutions), "bluesky" -> "bluesy", "twlo" -> "two" and "pre" -> "press" (a dropped
+        // or added key), "tha" -> "the" and "revanant" -> "revenant" (a and e are not neighbouring
+        // keys), "7am" -> "jam", "danaher" -> "manager", "auth" -> "with" and
+        // "descale" -> "rescale".
         val typedWordForEcho = values.composedData.mTypedWord
         val dictionaryCorrectionBeatsEcho: SuggestedWordInfo? = if (
                 maxWord != null && maxWordDict != null
@@ -574,8 +624,7 @@ public class LanguageModelFacilitator(
                 && !dictionaryFacilitator.isValidSpellingWord(typedWordForEcho)
                 && maxWordDict.mWord.first().equals(typedWordForEcho.first(), ignoreCase = true)
                 && !isDeliberateElongationOf(typedWordForEcho, maxWordDict.mWord)
-                && typedWordForEcho.length == maxWordDict.mWord.length
-                && levenshteinDistance(typedWordForEcho.lowercase(), maxWordDict.mWord.lowercase()) == 1
+                && isSingleNeighbouringKeySlip(typedWordForEcho, maxWordDict.mWord)
         ) maxWordDict else null
 
         var autocorrectWord: SuggestedWordInfo? = null
