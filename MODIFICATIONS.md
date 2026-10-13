@@ -110,22 +110,24 @@ part of the official FUTO Keyboard.
     could sit above the dictionary's correction, and the keyboard would then
     decide "the typed word is already the best suggestion" and commit the typo
     when space was pressed (`habe`, `parb`, `tha`, `ans`). The dictionary's
-    correction now takes the auto-correction slot instead. It is deliberately
-    narrow, so a word you meant is never rewritten: the echo must be byte for
-    byte what was typed (so the model's own capitalised word such as `Danaher` is
-    left alone), the dictionary's word must begin with the same letter (so
-    `danaher` -> `manager`, `descale` -> `rescale` and `auth` -> `with` cannot
-    happen), must be positively scored and marked appropriate by the dictionary,
-    and must be within two edits. A deliberate elongation such as `Ohhhh` is
-    never shortened.
+    correction now takes the auto-correction slot instead. The gates are narrow,
+    because over-correcting a word you meant is as bad as missing one: the
+    dictionary's word must be the **same length as what you typed with exactly one
+    character substituted**, must **begin with the same letter**, and must be
+    positively scored and marked appropriate by the dictionary. That is the shape
+    of a single wrong key, so `habe` -> `have`, `tha` -> `the`, `ans` -> `and`,
+    `licky` -> `lucky` and `revanant` -> `revenant` are fixed, while `tazo` ->
+    `task` and `parb` -> `path` (two wrong keys), `bluesky` -> `bluesy`,
+    `twlo` -> `two` and `pre` -> `press` (a dropped or added key),
+    `danaher` -> `manager`, `auth` -> `with`, `descale` -> `rescale` and
+    `7am` -> `jam` all stay exactly as typed. Sentence-initial typos work too, so
+    the model returning your word capitalised (`habe` as `Habe`) no longer
+    disables the fix. A deliberate elongation such as `Ohhhh` is never shortened.
 
-16. **When the sentence model has no idea, the dictionary's ordinary word is
-    used.** If what was typed is not a word and the model's best guess is further
-    away than a word in the built-in dictionary, that dictionary word is now
-    preferred, so `calen` -> `Caleb`, `remt` -> `rent`, `temijd` -> `remind`,
-    `jiu` -> `you` and `deepseel`-style near misses land on a real word. Words
-    with a negative dictionary score are ignored, and a token containing a digit
-    is never touched, so `7am`, `30k`, `40s` and `19th` keep their digits.
+16. **Tokens with digits and words the dictionary has no opinion about are left
+    alone.** A token containing a digit is never replaced, so `7am`, `30k`, `40s`
+    and `19th` keep their digits, and a candidate the dictionary scores below zero
+    is ignored, so it cannot become the top suggestion.
 
 ## Reporting problems
 

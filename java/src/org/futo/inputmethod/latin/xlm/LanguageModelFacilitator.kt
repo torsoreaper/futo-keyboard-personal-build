@@ -372,13 +372,12 @@ public class LanguageModelFacilitator(
             .asSequence()
             .filter {
                 val type = it.mSourceDict?.mDictType
-                // A built-in dictionary word counts here too: when the model has no close reading
-                // of a non-word ("calen" -> the model wants "Facebook") the dictionary's ordinary
-                // word ("Caleb") is the better answer. The distance < modelDistance test below is
-                // what keeps this from overriding the model whenever the model does have an
-                // opinion, and it also protects the user's own words (the model echoes those).
+                // Only the user's own dictionaries. Widening this to the built-in main dictionary
+                // was tried and reverted: when the model's guess is farther away than an ordinary
+                // dictionary word, promote-the-closest turned "remt" into "Remy" and "jiu" into
+                // "joy" (both verified on device). A built-in word is a credible answer only
+                // through the merge's own agreement paths, not through this preference.
                 type == Dictionary.TYPE_USER || type == Dictionary.TYPE_USER_HISTORY
-                        || type == Dictionary.TYPE_MAIN
             }
             // Machine-seeded built-in words (profanity / OTC medicine names) must not use the
             // user-word preference: they are recognised and suggested like any other dictionary
@@ -555,23 +554,28 @@ public class LanguageModelFacilitator(
         // auto-correction slot instead.
         //
         // The gates are deliberately narrow, because over-correcting a real word is as bad as
-        // missing one: the echo must be byte-for-byte what was typed (so the model's own
-        // capitalised word such as "Danaher" or "Tazo" is left alone), the dictionary's word must
-        // start with the same letter (so "danaher" -> "manager", "descale" -> "rescale" and
-        // "auth" -> "with" can never happen), must be positively scored and flagged appropriate by
-        // the native side, and must be within two edits.
+        // missing one. The echo is compared ignoring case, because the model returns the typed
+        // word capitalised at the start of a sentence ("habe" comes back as "Habe", "parb" as
+        // "Parb"), which used to defeat this branch completely. The dictionary's word must be the
+        // SAME LENGTH as what was typed with exactly ONE character substituted, and must start
+        // with the same letter. That is the shape of a single fat-fingered key, and it is what
+        // keeps the deliberate words alphabetically close to real ones: "tazo" -> "task" and
+        // "parb" -> "path" (two substitutions), "bluesky" -> "bluesy" and "twlo" -> "two" and
+        // "pre" -> "press" (different length, so a dropped or added key), "7am" -> "jam",
+        // "danaher" -> "manager", "auth" -> "with" and "descale" -> "rescale" all stay as typed.
         val typedWordForEcho = values.composedData.mTypedWord
         val dictionaryCorrectionBeatsEcho: SuggestedWordInfo? = if (
                 maxWord != null && maxWordDict != null
                 && typedWordForEcho.isNotEmpty()
-                && maxWord.mWord == typedWordForEcho
+                && maxWord.mWord.equals(typedWordForEcho, ignoreCase = true)
                 && !maxWordDict.mWord.equals(typedWordForEcho, ignoreCase = true)
                 && maxWordDict.mScore > 0
                 && maxWordDict.isAprapreateForAutoCorrection()
                 && !dictionaryFacilitator.isValidSpellingWord(typedWordForEcho)
                 && maxWordDict.mWord.first().equals(typedWordForEcho.first(), ignoreCase = true)
                 && !isDeliberateElongationOf(typedWordForEcho, maxWordDict.mWord)
-                && levenshteinDistance(typedWordForEcho.lowercase(), maxWordDict.mWord.lowercase()) <= 2
+                && typedWordForEcho.length == maxWordDict.mWord.length
+                && levenshteinDistance(typedWordForEcho.lowercase(), maxWordDict.mWord.lowercase()) == 1
         ) maxWordDict else null
 
         var autocorrectWord: SuggestedWordInfo? = null
