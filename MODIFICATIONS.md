@@ -136,6 +136,14 @@ part of the official FUTO Keyboard.
     such as `revanant` -> `revenant`, which better typing (not a wider radius) is
     the answer to.
 
+    That radius is a setting: **Settings -> Typing -> Typo correction range**. The
+    slider snaps to the five meaningful distances (1.000 adjacent keys only, 1.118
+    + closest diagonal, 1.414 + the rest of the touching ring *[the default]*,
+    1.803 adds `a`/`e`, 2.000 adds `e`/`t`), and tapping the readout lets you type
+    an exact value. It is capped at 2.000, so `d`/`m` at 5.099 is unreachable by
+    construction. Widening it trades a little more coverage (95.0% at 1.803) for
+    rewriting things that were not finger slips.
+
 16. **Tokens with digits and words the dictionary has no opinion about are left
     alone.** A token containing a digit is never replaced, so `7am`, `30k`, `40s`
     and `19th` keep their digits, and a candidate the dictionary scores below zero

@@ -130,6 +130,9 @@ import org.futo.inputmethod.latin.uix.settings.userSettingNavigationItem
 import org.futo.inputmethod.latin.uix.settings.userSettingToggleDataStore
 import org.futo.inputmethod.latin.uix.settings.userSettingToggleSharedPrefs
 import org.futo.inputmethod.latin.uix.theme.Typography
+import org.futo.inputmethod.latin.xlm.DEFAULT_NEIGHBOUR_RADIUS
+import org.futo.inputmethod.latin.xlm.NEIGHBOUR_RADIUS_BANDS
+import org.futo.inputmethod.latin.xlm.NeighbourRadiusSetting
 import org.futo.inputmethod.v2keyboard.KeyboardSettings
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
@@ -856,6 +859,44 @@ val TypingSettingsMenu = UserSettingsMenu(
     title = R.string.typing_settings_title,
     navPath = "typing", registerNavPath = true,
     settings = listOf(
+        UserSetting(
+            name = R.string.typing_settings_neighbour_radius,
+            component = {
+                val resources = LocalResources.current
+                SettingSlider(
+                    title = stringResource(R.string.typing_settings_neighbour_radius),
+                    subtitle = stringResource(
+                        R.string.typing_settings_neighbour_radius_subtitle,
+                        String.format("%.3f", DEFAULT_NEIGHBOUR_RADIUS)
+                    ),
+                    setting = NeighbourRadiusSetting,
+                    range = NEIGHBOUR_RADIUS_BANDS.first() .. NEIGHBOUR_RADIUS_BANDS.last(),
+                    hardRange = NEIGHBOUR_RADIUS_BANDS.first() .. NEIGHBOUR_RADIUS_BANDS.last(),
+                    transform = { position ->
+                        // Snap the slider to the nearest band. What is stored is the radius itself
+                        // (in key widths), so a value typed into the box is respected exactly, and
+                        // comparing against it is all the correction code does.
+                        NEIGHBOUR_RADIUS_BANDS.minByOrNull { band ->
+                            (band - position).absoluteValue
+                        } ?: DEFAULT_NEIGHBOUR_RADIUS
+                    },
+                    indicator = { radius ->
+                        val band = NEIGHBOUR_RADIUS_BANDS.indices.minByOrNull { i ->
+                            (NEIGHBOUR_RADIUS_BANDS[i] - radius).absoluteValue
+                        } ?: 2
+                        val label = when(band) {
+                            0 -> R.string.typing_settings_neighbour_radius_band0
+                            1 -> R.string.typing_settings_neighbour_radius_band1
+                            2 -> R.string.typing_settings_neighbour_radius_band2
+                            3 -> R.string.typing_settings_neighbour_radius_band3
+                            else -> R.string.typing_settings_neighbour_radius_band4
+                        }
+                        resources.getString(label, String.format("%.3f", radius))
+                    },
+                    steps = NEIGHBOUR_RADIUS_BANDS.size - 2
+                )
+            }
+        ),
         UserSetting(
             name = R.string.typing_settings_auto_space_mode,
             component = {

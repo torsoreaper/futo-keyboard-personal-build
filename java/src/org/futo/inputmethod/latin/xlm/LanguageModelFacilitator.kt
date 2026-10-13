@@ -58,6 +58,36 @@ private const val MAX_TRANSFORMER_CORRECTION_EDIT_DISTANCE = 3
 // typed is not itself a word, so it cannot hijack a real word like it used to.
 private const val MAX_USER_WORD_TYPO_DISTANCE = 3
 
+// How far, in key widths, the key the user pressed can be from the key they meant and still count
+// as a fat-fingered slip. Exposed as a setting so the trade can be felt rather than argued about;
+// the settings UI snaps to these bands.
+//
+// The keyboard centres each row (LayoutEngine.addGap splits the leftover width evenly and
+// computeRegularKeyWidth is layoutWidth / 10), so key centres are one key width apart and every
+// key-to-key distance is one of: 1.000 same row, 1.118 closest diagonal (sqrt(1.25)), 1.414 the
+// second diagonal (sqrt(2)), 1.803 one key over AND one row down (sqrt(3.25)), 2.000 two keys
+// along a row, 5.099 unrelated (d/m).
+//
+// Measured on the on-device logs (898 single-substitution typos): the touching ring covers 92.7%
+// (1.000 -> 81.3%, 1.118 -> 91.0%, 1.414 -> 92.7%). Widening to 1.803 reaches 95.0% but its extra
+// band is a/e and k/u (a spelling slip, not a finger slip), and everything past 2.0 (a further
+// 2.3%) is spread over 3-9 key widths and is not a finger slip at all. Hence the default is the
+// touching ring and the hard limit is 2.0, which keeps d/m (5.099) unreachable by construction.
+val NEIGHBOUR_RADIUS_BANDS = floatArrayOf(
+    1.0000000f, // directly adjacent keys only
+    1.1180340f, // + the closest diagonal
+    1.4142135f, // + the second diagonal: every key that touches the pressed key (the default)
+    1.8027756f, // + one key over and one row down (includes a/e)
+    2.0000000f  // + two keys along a row (e/t). The hard limit.
+)
+val DEFAULT_NEIGHBOUR_RADIUS = NEIGHBOUR_RADIUS_BANDS[2]
+val MAX_NEIGHBOUR_RADIUS = NEIGHBOUR_RADIUS_BANDS.last()
+
+val NeighbourRadiusSetting = SettingsKey(
+    floatPreferencesKey("neighbour_radius"),
+    DEFAULT_NEIGHBOUR_RADIUS
+)
+
 val AutocorrectThresholdSetting = SettingsKey(
     floatPreferencesKey("lm_autocorrect_threshold"),
     4.0f
@@ -258,9 +288,11 @@ private val KEYBOARD_ROWS = arrayOf(
 )
 private val KEYBOARD_ROW_OFFSETS = floatArrayOf(0.0f, 0.5f, 1.5f)
 
-// (sqrt(2))^2: the farthest distance at which two keys touch. The row offsets are exact halves,
-// so this comparison is exact and the epsilon is only belt and braces.
-private const val MAX_TOUCHING_SQUARED_DISTANCE = 2.0f
+// Distance squared is compared against the user's radius squared. The row offsets are exact halves,
+// so the squared distances land on exact values (1.0, 1.25, 2.0, 3.25, 4.0), but the radius comes
+// back from the data store as a float and can be a hair below sqrt(2), so a small epsilon stops a
+// band from dropping out. The gaps between bands are 0.25 or more, so it cannot pull in the next one.
+private const val NEIGHBOUR_RADIUS_EPSILON = 0.0001f
 
 private fun keyPosition(ch: Char): Pair<Float, Float>? {
     val lower = ch.lowercaseChar()
@@ -271,14 +303,14 @@ private fun keyPosition(ch: Char): Pair<Float, Float>? {
     return null
 }
 
-/** Whether two keys touch, i.e. whether one could be a single fat-fingered press of the other. */
-private fun areNeighbouringKeys(a: Char, b: Char): Boolean {
+/** Whether two keys are close enough that one could be a single fat-fingered press of the other. */
+private fun areNeighbouringKeys(a: Char, b: Char, maxSquaredDistance: Float): Boolean {
     if (a.equals(b, ignoreCase = true)) return false
     val pa = keyPosition(a) ?: return false
     val pb = keyPosition(b) ?: return false
     val dx = pa.first - pb.first
     val dy = pa.second - pb.second
-    return dx * dx + dy * dy <= MAX_TOUCHING_SQUARED_DISTANCE + 0.0001f
+    return dx * dx + dy * dy <= maxSquaredDistance
 }
 
 /**
@@ -288,7 +320,7 @@ private fun areNeighbouringKeys(a: Char, b: Char): Boolean {
  * and "revanant"/"revenant" (a and e are 1.8 key widths apart) are not treated as typos, and a
  * dropped or added key is excluded too because it is the shape of "bluesky"/"bluesy".
  */
-private fun isSingleNeighbouringKeySlip(typed: String, candidate: String): Boolean {
+private fun isSingleNeighbouringKeySlip(typed: String, candidate: String, maxSquaredDistance: Float): Boolean {
     if (typed.length != candidate.length) return false
     var differing = -1
     for (i in typed.indices) {
@@ -296,7 +328,7 @@ private fun isSingleNeighbouringKeySlip(typed: String, candidate: String): Boole
         if (differing >= 0) return false
         differing = i
     }
-    return differing >= 0 && areNeighbouringKeys(typed[differing], candidate[differing])
+    return differing >= 0 && areNeighbouringKeys(typed[differing], candidate[differing], maxSquaredDistance)
 }
 
 public class LanguageModelFacilitator(
@@ -632,6 +664,11 @@ public class LanguageModelFacilitator(
         // or added key), "tha" -> "the" and "revanant" -> "revenant" (a and e are not neighbouring
         // keys), "7am" -> "jam", "danaher" -> "manager", "auth" -> "with" and
         // "descale" -> "rescale".
+        // The typo-correction radius, in key widths, from Settings -> Typing. Default is the
+        // touching ring, so this changes nothing unless the user moves the slider.
+        val neighbourRadius = context.getSetting(NeighbourRadiusSetting)
+        val neighbourLimit = neighbourRadius * neighbourRadius + NEIGHBOUR_RADIUS_EPSILON
+
         val typedWordForEcho = values.composedData.mTypedWord
         val dictionaryCorrectionBeatsEcho: SuggestedWordInfo? = if (
                 maxWord != null && maxWordDict != null
@@ -643,7 +680,7 @@ public class LanguageModelFacilitator(
                 && !dictionaryFacilitator.isValidSpellingWord(typedWordForEcho)
                 && maxWordDict.mWord.first().equals(typedWordForEcho.first(), ignoreCase = true)
                 && !isDeliberateElongationOf(typedWordForEcho, maxWordDict.mWord)
-                && isSingleNeighbouringKeySlip(typedWordForEcho, maxWordDict.mWord)
+                && isSingleNeighbouringKeySlip(typedWordForEcho, maxWordDict.mWord, neighbourLimit)
         ) maxWordDict else null
 
         // A single wrong key is the shape of a fast typist's mistake, so when the model proposes a
@@ -658,7 +695,7 @@ public class LanguageModelFacilitator(
         // commit is required to be (MIN_TRANSFORMER_AUTOCORRECT_SCORE).
         val singleKeySlipTop: SuggestedWordInfo? = if (
                 maxWord != null && typedWordForEcho.isNotEmpty()
-                && isSingleNeighbouringKeySlip(typedWordForEcho, maxWord.mWord)
+                && isSingleNeighbouringKeySlip(typedWordForEcho, maxWord.mWord, neighbourLimit)
                 && !dictionaryFacilitator.isValidSpellingWord(typedWordForEcho)
                 && !maxWord.mWord.equals(typedWordForEcho, ignoreCase = true)
                 && maxWord.mWord.first().equals(typedWordForEcho.first(), ignoreCase = true)

@@ -460,6 +460,13 @@
     <string name="typing_settings_suggest_emojis_subtitle">Suggest emojis while you\'re typing</string>
     <string name="typing_settings_vibration_strength">Vibration</string>
     <string name="typing_settings_vibration_strength_default">Default</string>
+    <string name="typing_settings_neighbour_radius">Typo correction range</string>
+    <string name="typing_settings_neighbour_radius_subtitle">How far a key can be from the one you pressed and still count as a mistyped key. The default is %s key widths, which is every key that actually touches the pressed key. Two unrelated keys are far outside this: d and m are 5.099 apart and a and e are 1.803, so neither is ever treated as a slip.</string>
+    <string name="typing_settings_neighbour_radius_band0">%s keys - directly adjacent keys only</string>
+    <string name="typing_settings_neighbour_radius_band1">%s keys - adjacent keys plus the closest diagonal</string>
+    <string name="typing_settings_neighbour_radius_band2">%s keys - every key that touches the pressed key (recommended)</string>
+    <string name="typing_settings_neighbour_radius_band3">%s keys - also one key over and one row down, which includes a and e</string>
+    <string name="typing_settings_neighbour_radius_band4">%s keys - also two keys along a row, such as e and t. The limit.</string>
     <string name="typing_settings_keypress_sound_volume">Sound Volume</string>
     <string name="typing_settings_keypress_sound_volume_default">Default</string>
     <string name="typing_settings_keypress_sound_volume_vendor_warning">The volume setting may have no effect on some versions of Android.</string>
