@@ -680,7 +680,7 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
 
     public void addToUserHistory(final String suggestion, final boolean wasAutoCapitalized,
             @Nonnull final NgramContext ngramContext, final long timeStampInSeconds,
-            final boolean blockPotentiallyOffensive) {
+            final boolean blockPotentiallyOffensive, final int importance) {
         // Update the spelling cache before learning. Words that are not yet added to user history
         // and appear in no other language model are not considered valid.
         putWordIntoValidSpellingWordCache("addToUserHistory", suggestion);
@@ -697,7 +697,7 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
             final boolean wasCurrentWordAutoCapitalized = i == 0 && wasAutoCapitalized;
             addWordToUserHistory(mostConfidentDictionary, ngramContextForCurrentWord, currentWord,
                     wasCurrentWordAutoCapitalized, (int) timeStampInSeconds,
-                    blockPotentiallyOffensive);
+                    blockPotentiallyOffensive, importance);
             ngramContextForCurrentWord =
                     ngramContextForCurrentWord.getNextNgramContext(new WordInfo(currentWord));
         }
@@ -728,7 +728,8 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
 
     private void addWordToUserHistory(final DictionaryGroup dictionaryGroup,
             final NgramContext ngramContext, final String word, final boolean wasAutoCapitalized,
-            final int timeStampInSeconds, final boolean blockPotentiallyOffensive) {
+            final int timeStampInSeconds, final boolean blockPotentiallyOffensive,
+            final int importance) {
         final ExpandableBinaryDictionary userHistoryDictionary =
                 dictionaryGroup.getSubDict(Dictionary.TYPE_USER_HISTORY);
         if (userHistoryDictionary == null || !isForLocale(userHistoryDictionary.mLocale)) {
@@ -772,7 +773,16 @@ public class DictionaryFacilitatorImpl implements DictionaryFacilitator {
         }
         // We demote unrecognized words (frequency < 0, below) by specifying them as "invalid".
         // We don't add words with 0-frequency (assuming they would be profanity etc.).
-        final boolean isValid = maxFreq > 0;
+        //
+        // The exception is a word the user picked by hand: tapping a suggestion is the user saying
+        // "this is the word I meant", and the dictionaries not knowing it is exactly why they
+        // tapped. Without this, a word like "opencode" is recorded but stored invalid, so it is not
+        // offered back (verified on device: tapped at 06:57:24, first offered at 07:05:06).
+        // IMPORTANCE_KEPT_TYPED (3) is deliberately NOT included: that is the user tapping the
+        // typed form to keep what they typed, and marking a kept typo valid would make it a
+        // preferred correction target for findCloseUserWord later.
+        final boolean isValid = maxFreq > 0
+                || importance == DictionaryFacilitator.IMPORTANCE_MANUALLY_SELECTED;
         UserHistoryDictionary.addToDictionary(userHistoryDictionary, ngramContext, secondWord,
                 isValid, timeStampInSeconds);
     }

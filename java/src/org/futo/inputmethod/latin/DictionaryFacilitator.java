@@ -158,9 +158,20 @@ public interface DictionaryFacilitator {
 
     Locale getMostConfidentLocale();
 
+    /**
+     * @param importance how the word was chosen; see TrainingDataLog. Words with
+     *        {@link #IMPORTANCE_MANUALLY_SELECTED} are valid even if no dictionary knows them,
+     *        because tapping a suggestion is the user saying "this is the word I meant".
+     */
     void addToUserHistory(final String suggestion, final boolean wasAutoCapitalized,
                           @Nonnull final NgramContext ngramContext, final long timeStampInSeconds,
-                          final boolean blockPotentiallyOffensive);
+                          final boolean blockPotentiallyOffensive, final int importance);
+
+    // Mirrors TrainingDataLog's documented values: 0 auto-corrected, 1 manually picked, 3 the user
+    // tapping the typed form to keep it. Only 1 means "the user chose this word".
+    int IMPORTANCE_AUTOCORRECTED = 0;
+    int IMPORTANCE_MANUALLY_SELECTED = 1;
+    int IMPORTANCE_KEPT_TYPED = 3;
 
     void unlearnFromUserHistory(final String word,
             @Nonnull final NgramContext ngramContext, final long timeStampInSeconds,

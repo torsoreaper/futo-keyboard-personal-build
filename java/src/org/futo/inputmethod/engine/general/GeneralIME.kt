@@ -144,7 +144,7 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
         dictionaryFacilitator.addToUserHistory(
             word, wasCapitalized,
             ngramContext, timestamp,
-            blockOffensive
+            blockOffensive, importance
         )
 
         if (settings.current.mTransformerPredictionEnabled) {
