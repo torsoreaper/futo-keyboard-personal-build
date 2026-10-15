@@ -331,6 +331,47 @@ private fun isSingleNeighbouringKeySlip(typed: String, candidate: String, maxSqu
     return differing >= 0 && areNeighbouringKeys(typed[differing], candidate[differing], maxSquaredDistance)
 }
 
+private val SPELLING_VOWELS = "aeiou"
+
+private fun isVowelSpellingSwap(a: Char, b: Char): Boolean {
+    if (a.equals(b, ignoreCase = true)) return false
+    val la = a.lowercaseChar()
+    val lb = b.lowercaseChar()
+    return la in SPELLING_VOWELS && lb in SPELLING_VOWELS
+}
+
+/**
+ * Case 2: right keys, wrong spelling. Same length, exactly one substitution, and that
+ * substitution is a vowel for a vowel ("seperate"/"separate"). This is not a finger slip:
+ * a and e do not touch, and treating them as if they did is what turns "tha" into "the".
+ * Case 3: that spelling error plus exactly one neighbouring-key slip ("srperate"/"separate").
+ * Anything else (a dropped key, two spelling errors, a consonant swapped for a far key) is not
+ * this shape. Length >= 6 keeps short tokens ("tha", "jiu", "auth", "tazo", "twlo") out.
+ */
+private fun isSpellingOrSpellingPlusSlip(
+    typed: String,
+    candidate: String,
+    maxSquaredDistance: Float,
+): Boolean {
+    if (typed.length != candidate.length || typed.length < 6) return false
+    if (!typed.first().equals(candidate.first(), ignoreCase = true)) return false
+    var vowelSwaps = 0
+    var neighbourSlips = 0
+    var other = 0
+    for (i in typed.indices) {
+        if (typed[i].equals(candidate[i], ignoreCase = true)) continue
+        when {
+            // A vowel pair that also happens to touch (i/o) is the spelling error, not the slip.
+            isVowelSpellingSwap(typed[i], candidate[i]) -> vowelSwaps++
+            areNeighbouringKeys(typed[i], candidate[i], maxSquaredDistance) -> neighbourSlips++
+            else -> other++
+        }
+    }
+    if (other > 0) return false
+    if (vowelSwaps == 1 && neighbourSlips == 0) return true
+    return vowelSwaps == 1 && neighbourSlips == 1
+}
+
 public class LanguageModelFacilitator(
     val context: Context,
     val inputLogic: InputLogic,
@@ -787,6 +828,99 @@ public class LanguageModelFacilitator(
             autocorrectWord = clone
             suggestionResults.add(clone)
             filtered.add(maxWordDict)
+        }
+
+        // The model's best guess can be a spelling the keyboard does not know: the transformer
+        // invents words such as "seperate" and, because the strip is ordered by score, the invention
+        // takes the middle slot. Two things then go wrong at once: the middle shows a word that does
+        // not exist, and pressing space refuses to commit it, because an invented word carries no
+        // appropriate-for-auto-correction flag and Suggest keeps what was typed in that case. When
+        // the model is reaching for a real word as well and the dictionary agrees that word is the
+        // reading of what was typed, that word belongs in the slot instead.
+        //
+        // This is deliberately not "the dictionary's closest word wins". The model's top being the
+        // echo of what was typed is the common case for a deliberate non-word ("twlo", "jiu",
+        // "tazo"), and promoting a dictionary word there is the over-correction that was tried,
+        // verified on device and reverted ("jiu" -> "joy", "remt" -> "Remy"). So the branch only
+        // fires when the model is reaching PAST the echo for a spelling it invented, and it only
+        // promotes a word the model also proposed with real confidence.
+        val modelTopIsTheTypedWordEcho = maxWord != null
+                && maxWord.mWord.equals(typedWordForEcho, ignoreCase = true)
+        val modelTopIsInNoDictionary = maxWord != null
+                && suggestedWordsDictList.none { it.mWord.equals(maxWord.mWord, ignoreCase = true) }
+        if (autocorrectWord == null && maxWord != null && maxWordDict != null
+                && !modelTopIsTheTypedWordEcho
+                && modelTopIsInNoDictionary
+                && !maxWord.mWord.contains(' ')
+                && typedWordForEcho.length > 1
+                && typedWordForEcho.none { it.isDigit() }
+                && !isKnownWord(typedWordForEcho)) {
+            val dictionaryWord = maxWordDict.takeIf {
+                it != suggestedWordsDict.typedWordInfo
+                        && !it.mWord.equals(typedWordForEcho, ignoreCase = true)
+                        && it.mScore > 0
+                        && it.isAprapreateForAutoCorrection()
+                        && !it.mWord.contains(' ')
+                        && transformerCorrectionIsPlausible(typedWordForEcho, it.mWord)
+                        // The model has to be offering this word itself, not merely something the
+                        // dictionary happens to hold near the typed keys. That agreement is what
+                        // separates "sepeeatw" (the model offers "separate" below its invented
+                        // "seperate") from a deliberate non-word the model never spells correctly.
+                        && reweightedSuggestions.any { model ->
+                            model.mWord.equals(it.mWord, ignoreCase = true)
+                                    && model.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE
+                        }
+            }
+            if (dictionaryWord != null) {
+                if(BuildConfig.DEBUG) Log.d(TAG, "dictionary word '${dictionaryWord.mWord}' replaces the model's invented '${maxWord.mWord}'")
+                val clone = dictionaryWord.scoreAtLeast(maxWord)
+                autocorrectWord = clone
+                suggestionResults.add(clone)
+                filtered.add(dictionaryWord)
+            }
+        }
+
+        // Case 2 and case 3. The neighbour rule is the wrong test for a misspelling: "seperate"
+        // is the right keys and the wrong spelling, and a/e is not a finger slip. "srperate" is
+        // that misspelling plus one neighbouring key. Commit the real word when the dictionary
+        // has it and the model offers it too. This does not run when an earlier branch already
+        // chose, and it does not treat a vowel swap as a neighbouring key.
+        if (autocorrectWord == null && maxWord != null
+                && typedWordForEcho.length >= 6
+                && typedWordForEcho.none { it.isDigit() }
+                && !isKnownWord(typedWordForEcho)) {
+            val spellingFix = suggestedWordsDictList
+                .asSequence()
+                .filter { it != suggestedWordsDict.typedWordInfo }
+                .filter { it.mScore > 0 && it.isAprapreateForAutoCorrection() && !it.mWord.contains(' ') }
+                .filter { isSpellingOrSpellingPlusSlip(typedWordForEcho, it.mWord, neighbourLimit) }
+                .filter { transformerCorrectionIsPlausible(typedWordForEcho, it.mWord) }
+                .map { dictWord ->
+                    dictWord to reweightedSuggestions.filter {
+                        it.mWord.equals(dictWord.mWord, ignoreCase = true)
+                                && it.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE
+                    }.maxOfOrNull { it.mScore }
+                }
+                .filter { it.second != null }
+                .maxByOrNull { it.second!! }
+                ?.first
+            // A completion of what was typed ("tha" → "that") is a better reading than a vowel
+            // swap ("tha" → "the"). Do not spelling-correct when the model offers such a completion.
+            // Length >= 6 already excludes "tha"; this is the same guard for a longer stem.
+            val completionBeatsIt = spellingFix != null && reweightedSuggestions.any { model ->
+                model.mScore >= MIN_TRANSFORMER_AUTOCORRECT_SCORE
+                        && model.mWord.length > typedWordForEcho.length
+                        && model.mWord.length - typedWordForEcho.length <= 3
+                        && model.mWord.startsWith(typedWordForEcho, ignoreCase = true)
+                        && dictionaryFacilitator.isValidSpellingWord(model.mWord)
+            }
+            if (spellingFix != null && !completionBeatsIt) {
+                if(BuildConfig.DEBUG) Log.d(TAG, "spelling fix '${spellingFix.mWord}' for '$typedWordForEcho'")
+                val clone = spellingFix.scoreAtLeast(maxWord)
+                autocorrectWord = clone
+                suggestionResults.add(clone)
+                filtered.add(spellingFix)
+            }
         }
 
         if(transformerWeight <= 0.0f) {

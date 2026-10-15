@@ -626,6 +626,16 @@
     <string name="prediction_settings_word_blacklist_edit_blacklisted_words_title">View and edit blacklisted words</string>
     <string name="prediction_settings_word_blacklist_edit_blacklisted_words_subtitle">Click here to view the list of blacklisted suggestions, add or remove entries</string>
     <string name="prediction_settings_word_blacklist_remove_word_from_blacklist">Remove word</string>
+    <string name="prediction_settings_word_blacklist_deletes_learned">Adding a word here also removes it from the words the keyboard has learned from your typing.</string>
+    <string name="learned_words_title">Learned words</string>
+    <string name="learned_words_subtitle">Words the keyboard picked up from your typing. Delete one to stop it being suggested.</string>
+    <string name="learned_words_none">No learned words yet.</string>
+    <string name="learned_words_filter">Filter</string>
+    <string name="learned_words_delete">Delete</string>
+    <string name="learned_words_delete_all">Delete all learned words</string>
+    <string name="learned_words_delete_all_confirm">Delete every word the keyboard has learned from your typing? Your personal dictionary is not touched.</string>
+    <string name="learned_words_share">Share list</string>
+    <string name="learned_words_loading">Reading learned words…</string>
 
 
     <!-- Help & feedback menu -->

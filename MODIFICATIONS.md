@@ -189,6 +189,26 @@ part of the official FUTO Keyboard.
     itself to keep it is deliberately *not* treated that way — that would turn a
     kept typo into a preferred correction later.
 
+21. **A misspelling is not a finger slip.** `seperate` is the right keys and the
+    wrong spelling. `a` and `e` do not touch, so the neighbouring-key rule correctly
+    refuses it, and that refusal was also refusing the misspelling. A vowel swapped
+    for a vowel, in a word of at least six letters, now commits when the dictionary
+    has the real word and the sentence model offers it too (`seperate` → `separate`).
+    The same rule allows one neighbouring-key slip on top of that spelling error
+    (`srperate` → `separate`). Short tokens stay out (`tha`, `jiu`, `auth`, `tazo`,
+    `twlo`). `a`/`e` is still not treated as a finger slip.
+
+22. **An invented word does not get the middle slot.** If the model's favourite is a
+    spelling no dictionary knows (`sepeeatw` read as `seperate`) and the dictionary's
+    own word is one the model also offers (`separate`), space commits the real word.
+    This does not run when the model simply echoes what you typed, so a deliberate
+    non-word such as `twlo` or `jiu` is left alone.
+
+23. **Learned words can be seen and deleted.** Settings → Predictive text → Learned
+    words lists what the keyboard picked up from your typing. Delete one word, or
+    all of them. That does not touch the personal dictionary, and it is not the
+    blacklist. Share list sends the words as plain text.
+
 ## Reporting problems
 
 Please do not report issues with this build to FUTO. They are not responsible

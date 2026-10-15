@@ -19,6 +19,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.futo.inputmethod.annotations.UsedForTesting
 import org.futo.inputmethod.engine.ExpandableSuggestionBarConfiguration
 import org.futo.inputmethod.engine.GlobalIMEMessage
+import org.futo.inputmethod.engine.GlobalUnlearnLearnedWords
 import org.futo.inputmethod.engine.IMEHelper
 import org.futo.inputmethod.engine.IMEInterface
 import org.futo.inputmethod.engine.IMEMessage
@@ -221,6 +222,25 @@ class GeneralIME(val helper: IMEHelper) : IMEInterface, WordLearner, SuggestionS
                         resetDictionaryFacilitator(force = true, reloadAllDicts = true)
                     }
                     else -> {}
+                }
+            }
+        }
+
+        // Words the user has asked the keyboard to forget (by blacklisting them). Removing the word
+        // from the history dictionary only takes effect once the dictionaries are reloaded, which is
+        // why this resets them; leaving the old copy in memory would keep the word alive for the
+        // rest of the session.
+        helper.lifecycleScope.launch {
+            GlobalUnlearnLearnedWords.collect { word ->
+                if (word.isBlank()) return@collect
+                withContext(Dispatchers.Main) {
+                    removeFromHistory(
+                        word,
+                        NgramContext.EMPTY_PREV_WORDS_INFO,
+                        System.currentTimeMillis() / 1000L,
+                        Constants.EVENT_REVERT
+                    )
+                    resetDictionaryFacilitator(force = true)
                 }
             }
         }

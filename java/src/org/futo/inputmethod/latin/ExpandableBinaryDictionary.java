@@ -796,4 +796,73 @@ abstract public class ExpandableBinaryDictionary extends Dictionary {
         return result.get(DEFAULT_WORD_PROPERTIES_FOR_SYNC,
                 TIMEOUT_FOR_READ_OPS_IN_MILLISECONDS);
     }
+
+    /**
+     * Every unigram in this dictionary. Same walk as {@link #getWordPropertiesForSyncing}, but the
+     * caller picks the timeout: the syncing call gives up after 100 ms, which is not enough to
+     * list a history dictionary the user wants to clean.
+     */
+    @Nullable
+    public WordProperty[] getAllWordProperties(final int timeoutMillis) {
+        reloadDictionaryIfRequired();
+        final AsyncResultHolder<WordProperty[]> result =
+                new AsyncResultHolder<>("AllWordProperties");
+        asyncExecuteTaskWithLock(mLock.readLock(), new Runnable() {
+            @Override
+            public void run() {
+                final ArrayList<WordProperty> wordPropertyList = new ArrayList<>();
+                final BinaryDictionary binaryDictionary = getBinaryDictionary();
+                if (binaryDictionary == null) {
+                    result.set(new WordProperty[0]);
+                    return;
+                }
+                int token = 0;
+                do {
+                    final BinaryDictionary.GetNextWordPropertyResult nextWordPropertyResult =
+                            binaryDictionary.getNextWordProperty(token);
+                    final WordProperty wordProperty = nextWordPropertyResult.mWordProperty;
+                    if (wordProperty == null) {
+                        break;
+                    }
+                    wordPropertyList.add(wordProperty);
+                    token = nextWordPropertyResult.mNextToken;
+                } while (token != 0);
+                result.set(wordPropertyList.toArray(new WordProperty[wordPropertyList.size()]));
+            }
+        });
+        return result.get(null, timeoutMillis);
+    }
+
+    /**
+     * Remove these unigrams and flush the file before returning. The settings screen uses this so
+     * a deleted word is gone from disk before the keyboard reloads the dictionary.
+     */
+    public boolean removeWordsBlocking(final java.util.Collection<String> words,
+            final int timeoutMillis) {
+        if (words == null || words.isEmpty()) return true;
+        reloadDictionaryIfRequired();
+        final AsyncResultHolder<Boolean> result = new AsyncResultHolder<>("RemoveWords");
+        asyncExecuteTaskWithWriteLock(new Runnable() {
+            @Override
+            public void run() {
+                final BinaryDictionary binaryDictionary = getBinaryDictionary();
+                if (binaryDictionary == null) {
+                    result.set(false);
+                    return;
+                }
+                for (final String word : words) {
+                    if (word == null || word.isEmpty()) continue;
+                    binaryDictionary.removeUnigramEntry(word);
+                }
+                if (binaryDictionary.needsToRunGC(false /* mindsBlockByGC */)) {
+                    binaryDictionary.flushWithGC();
+                } else {
+                    binaryDictionary.flush();
+                }
+                result.set(true);
+            }
+        });
+        final Boolean removed = result.get(false, timeoutMillis);
+        return removed != null && removed;
+    }
 }

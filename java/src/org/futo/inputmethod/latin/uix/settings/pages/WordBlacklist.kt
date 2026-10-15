@@ -25,6 +25,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import org.futo.inputmethod.engine.GlobalUnlearnLearnedWords
 import org.futo.inputmethod.latin.R
 import org.futo.inputmethod.latin.settings.Settings
 import org.futo.inputmethod.latin.uix.SUGGESTION_BLACKLIST
@@ -112,11 +113,18 @@ fun BlacklistScreen(navController: NavHostController = rememberNavController()) 
                 val newSet = blacklistedWords.toMutableSet()
                 newSet.add(newWord)
                 setBlacklistedWords(newSet)
+                // Blacklisting means "this is not a word I want", so drop it from the learned words
+                // as well. A word learned from an earlier mistap otherwise stays in the history
+                // dictionary, where it keeps competing as a correction target even after the user
+                // has explicitly said it is not a word.
+                GlobalUnlearnLearnedWords.tryEmit(newWord)
                 newWord = ""
             }, modifier = Modifier.align(Alignment.CenterVertically)) {
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.prediction_settings_word_blacklist_add))
             }
         }
+
+        Tip(stringResource(R.string.prediction_settings_word_blacklist_deletes_learned))
 
         if(blacklistedWords.isEmpty()) {
             Tip(stringResource(R.string.prediction_settings_word_blacklist_none))

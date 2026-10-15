@@ -68,6 +68,14 @@ val PredictiveTextMenu = UserSettingsMenu(
         ),
 
         userSettingNavigationItem(
+            title = R.string.learned_words_title,
+            subtitle = R.string.learned_words_subtitle,
+            style = NavigationItemStyle.HomeSecondary,
+            icon = R.drawable.file_text,
+            navigateTo = "learnedWords"
+        ),
+
+        userSettingNavigationItem(
             title = R.string.prediction_settings_word_blacklist,
             style = NavigationItemStyle.HomeSecondary,
             icon = R.drawable.file_text,

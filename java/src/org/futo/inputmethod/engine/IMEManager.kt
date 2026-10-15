@@ -40,6 +40,21 @@ val GlobalIMEMessage = MutableSharedFlow<IMEMessage>(
     extraBufferCapacity = 8
 )
 
+/**
+ * A word to remove from the learned dictionaries - the typing-history store that records what the
+ * user has actually committed, which is where a mistyped word goes when space or a tapped
+ * suggestion puts it in the text.
+ *
+ * Blacklisting a word means "do not use this word", and a word the keyboard should not use must
+ * not be kept as a learned word either: blacklisted words stay in the history dictionary
+ * otherwise, where they keep competing as correction targets. This is also the whole mechanism for
+ * cleaning a bad word out without wiping everything else that has been learned.
+ */
+val GlobalUnlearnLearnedWords = MutableSharedFlow<String>(
+    replay = 0,
+    extraBufferCapacity = 16
+)
+
 private val ImesEverUsedWithDictionaryPersonalization = SettingsKey(
     stringSetPreferencesKey("ImesEverUsedWithDictionaryPersonalization"),
     emptySet()
